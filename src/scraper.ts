@@ -1,12 +1,31 @@
 import * as cheerio from 'cheerio'
 import type { ArticleLink } from './types.js'
 
+// Public Types and Options
+
+export interface ScrapeOptions {
+  newsletters: string[]
+  dateStart: string
+  dateEnd: string
+  onProgress?: (date: string, source: string, count: number) => void
+}
+
+export interface ArchiveBatch {
+  date: string
+  source: string
+  links: ArticleLink[]
+}
+
+// Constants
+
 const TLDR_BASE = 'https://tldr.tech'
 const SPONSOR_MARKER = '(Sponsor)'
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
-function* dateRange(start: string, end: string): Generator<string> {
+// Date Helpers
+
+function dateRange(start: string, end: string): string[] {
   const startDate = new Date(start)
   const endDate = new Date(end)
 
@@ -14,26 +33,35 @@ function* dateRange(start: string, end: string): Generator<string> {
     throw new Error(`Invalid date range: start (${start}) is after end (${end})`)
   }
 
+  const dates: string[] = []
   const current = new Date(startDate)
 
   while (current <= endDate) {
-    yield current.toISOString().slice(0, 10)
+    dates.push(current.toISOString().slice(0, 10))
 
     current.setUTCDate(current.getUTCDate() + 1) // Use UTC date math to avoid DST issues.
   }
+
+  return dates
 }
 
-function* dateSourcePairs(
+function dateSourcePairs(
   newsletters: string[],
   startDate: string,
   endDate: string
-): Generator<{ date: string; source: string }> {
+): { date: string; source: string }[] {
+  const pairs: { date: string; source: string }[] = []
+
   for (const date of dateRange(startDate, endDate)) {
     for (const source of newsletters) {
-      yield { date, source }
+      pairs.push({ date, source })
     }
   }
+
+  return pairs
 }
+
+// Fetch and Parse
 
 async function fetchArchivePage(url: string): Promise<string | null> {
   try {
@@ -77,42 +105,7 @@ function extractLinksFromHtml(html: string, date: string, source: string): Artic
   return links
 }
 
-export interface ScrapeOptions {
-  newsletters: string[]
-  dateStart: string
-  dateEnd: string
-  onProgress?: (date: string, source: string, count: number) => void
-}
-
-export async function* scrapeArchives(options: ScrapeOptions): AsyncGenerator<ArticleLink> {
-  const { newsletters, dateStart, dateEnd } = options
-  const seen = new Set<string>() // Same link can appear on multiple archive pages; skip duplicates.
-
-  for (const { date, source } of dateSourcePairs(newsletters, dateStart, dateEnd)) {
-    const url = `${TLDR_BASE}/${source}/${date}`
-    const html = await fetchArchivePage(url)
-
-    if (!html) continue
-
-    const links = extractLinksFromHtml(html, date, source)
-
-    options.onProgress?.(date, source, links.length)
-
-    for (const link of links) {
-      if (seen.has(link.url)) continue
-
-      seen.add(link.url)
-
-      yield link
-    }
-  }
-}
-
-export interface ArchiveBatch {
-  date: string
-  source: string
-  links: ArticleLink[]
-}
+// Public Entry Point
 
 export async function* scrapeArchivesBatched(options: ScrapeOptions): AsyncGenerator<ArchiveBatch> {
   const { newsletters, dateStart, dateEnd } = options
