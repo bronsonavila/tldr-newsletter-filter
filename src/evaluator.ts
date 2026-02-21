@@ -1,6 +1,8 @@
 import { EvaluatedStatus } from './types.js'
 import OpenAI from 'openai'
 
+// Public Types and Options
+
 export type EvaluateResult =
   | { status: 'matched'; reason: string; tokens?: number }
   | { status: 'not_matched'; reason: string; tokens?: number }
@@ -10,6 +12,13 @@ export type SummaryEvaluateResult =
   | { status: 'passed'; reason: string; tokens?: number }
   | { status: 'rejected'; reason: string; tokens?: number }
   | { status: 'evaluation_failed'; reason: string; tokens?: number }
+
+export interface EvaluateOptions {
+  model: string
+  criteria: string
+}
+
+// System Instructions
 
 // Stage 1 screening: Ballpark relevance only. Avoids full-article calls for clearly off-topic items.
 const SUMMARY_SYSTEM_INSTRUCTION = `<role>
@@ -51,10 +60,7 @@ Return your response as JSON with these exact fields:
 }
 </output_format>`
 
-export interface EvaluateOptions {
-  model: string
-  criteria: string
-}
+// API Client
 
 function getApiKey(): string {
   const key = process.env.OPENROUTER_API_KEY
@@ -74,9 +80,16 @@ function getClient(): OpenAI {
   return client
 }
 
-function parseStructuredResponse(text: string | undefined): EvaluateResult {
+// Response Parsing
+
+type BooleanParseResult<T> = { status: T; reason: string } | { status: 'evaluation_failed'; reason: string }
+
+function parseBooleanJsonResponse<T extends string>(
+  text: string | undefined,
+  options: { trueStatus: T; falseStatus: T; field: string }
+): BooleanParseResult<T> {
   if (!text?.trim()) {
-    return { status: EvaluatedStatus.evaluation_failed, reason: 'Empty response' }
+    return { status: 'evaluation_failed', reason: 'Empty response' }
   }
 
   let cleaned = text.trim()
@@ -96,50 +109,39 @@ function parseStructuredResponse(text: string | undefined): EvaluateResult {
   }
 
   try {
-    const parsed = JSON.parse(cleaned) as { satisfies_criteria: boolean; reason: string }
+    const parsed = JSON.parse(cleaned) as Record<string, unknown>
+    const value = parsed[options.field]
+    const reason = typeof parsed.reason === 'string' ? parsed.reason : ''
 
-    if (parsed.satisfies_criteria === true) {
-      return { status: EvaluatedStatus.matched, reason: parsed.reason }
+    if (value === true) {
+      return { status: options.trueStatus, reason }
     }
 
-    return { status: EvaluatedStatus.not_matched, reason: parsed.reason }
+    return { status: options.falseStatus, reason }
   } catch {
-    const preview = text.slice(0, 200).replace(/\n/g, '\\n')
-
-    return { status: EvaluatedStatus.evaluation_failed, reason: `Invalid JSON: ${preview}` }
-  }
-}
-
-function parseSummaryResponse(text: string | undefined): SummaryEvaluateResult {
-  if (!text?.trim()) {
-    return { status: 'evaluation_failed', reason: 'Empty response' }
-  }
-
-  let cleaned = text.trim()
-
-  const fenceMatch = cleaned.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
-
-  if (fenceMatch) cleaned = fenceMatch[1].trim()
-
-  const start = cleaned.indexOf('{')
-  const end = cleaned.lastIndexOf('}')
-
-  if (start !== -1 && end > start) cleaned = cleaned.slice(start, end + 1)
-
-  try {
-    const parsed = JSON.parse(cleaned) as { potentially_relevant: boolean; reason: string }
-
-    if (parsed.potentially_relevant === true) {
-      return { status: 'passed', reason: parsed.reason }
-    }
-
-    return { status: 'rejected', reason: parsed.reason }
-  } catch {
-    const preview = text.slice(0, 200).replace(/\n/g, '\\n')
+    const preview = (text ?? '').slice(0, 200).replace(/\n/g, '\\n')
 
     return { status: 'evaluation_failed', reason: `Invalid JSON: ${preview}` }
   }
 }
+
+function parseStructuredResponse(text: string | undefined): EvaluateResult {
+  return parseBooleanJsonResponse(text, {
+    field: 'satisfies_criteria',
+    trueStatus: EvaluatedStatus.matched,
+    falseStatus: EvaluatedStatus.not_matched
+  }) as EvaluateResult
+}
+
+function parseSummaryResponse(text: string | undefined): SummaryEvaluateResult {
+  return parseBooleanJsonResponse(text, {
+    field: 'potentially_relevant',
+    trueStatus: 'passed',
+    falseStatus: 'rejected'
+  }) as SummaryEvaluateResult
+}
+
+// User Content Builders
 
 function buildSummaryUserContent(title: string, summary: string, criteria: string): string {
   return `<context>
@@ -161,29 +163,6 @@ ${criteria}
 </task>`
 }
 
-export async function evaluateSummary(
-  title: string,
-  summary: string,
-  options: EvaluateOptions
-): Promise<SummaryEvaluateResult> {
-  const client = getClient()
-  const userContent = buildSummaryUserContent(title, summary, options.criteria)
-
-  const response = await client.chat.completions.create({
-    model: options.model,
-    messages: [
-      { role: 'system', content: SUMMARY_SYSTEM_INSTRUCTION },
-      { role: 'user', content: userContent }
-    ],
-    response_format: { type: 'json_object' }
-  })
-
-  const result = parseSummaryResponse(response.choices[0]?.message?.content ?? undefined)
-  const tokens = response.usage?.total_tokens
-
-  return { ...result, ...(tokens !== undefined && { tokens }) }
-}
-
 function buildUserContent(articleText: string, criteria: string): string {
   // Cap prompt size for the model. The article fetcher may provide more, but truncate here for the evaluation request.
   const raw = articleText.length > 100_000 ? articleText.slice(0, 100_000) + '\n\n[Article truncated.]' : articleText
@@ -202,21 +181,55 @@ ${criteria}
 </task>`
 }
 
-export async function evaluateArticle(articleText: string, options: EvaluateOptions): Promise<EvaluateResult> {
+// Evaluation Orchestration
+
+async function evaluateWithInstructions<T extends { status: string; reason: string }>(options: {
+  model: string
+  systemInstruction: string
+  userContent: string
+  parse: (content: string | undefined) => T
+}): Promise<T & { tokens?: number }> {
   const client = getClient()
-  const userContent = buildUserContent(articleText, options.criteria)
 
   const response = await client.chat.completions.create({
     model: options.model,
     messages: [
-      { role: 'system', content: ARTICLE_SYSTEM_INSTRUCTION },
-      { role: 'user', content: userContent }
+      { role: 'system', content: options.systemInstruction },
+      { role: 'user', content: options.userContent }
     ],
     response_format: { type: 'json_object' }
   })
 
-  const result = parseStructuredResponse(response.choices[0]?.message?.content ?? undefined)
+  const result = options.parse(response.choices[0]?.message?.content ?? undefined)
   const tokens = response.usage?.total_tokens
 
   return { ...result, ...(tokens !== undefined && { tokens }) }
+}
+
+// Public Entry Points
+
+export async function evaluateSummary(
+  title: string,
+  summary: string,
+  options: EvaluateOptions
+): Promise<SummaryEvaluateResult> {
+  const userContent = buildSummaryUserContent(title, summary, options.criteria)
+
+  return evaluateWithInstructions({
+    model: options.model,
+    systemInstruction: SUMMARY_SYSTEM_INSTRUCTION,
+    userContent,
+    parse: parseSummaryResponse
+  })
+}
+
+export async function evaluateArticle(articleText: string, options: EvaluateOptions): Promise<EvaluateResult> {
+  const userContent = buildUserContent(articleText, options.criteria)
+
+  return evaluateWithInstructions({
+    model: options.model,
+    systemInstruction: ARTICLE_SYSTEM_INSTRUCTION,
+    userContent,
+    parse: parseStructuredResponse
+  })
 }
