@@ -10,6 +10,87 @@ import { writeOutput } from './output.js'
 import ora from 'ora'
 import pLimit from 'p-limit'
 import type { ArticleLink, EvaluatedArticle } from './types.js'
+import type { Config } from './config.js'
+
+// Helpers
+
+async function recordResult(
+  progress: Record<string, EvaluatedArticle>,
+  counts: { done: number; matches: number },
+  result: EvaluatedArticle
+): Promise<void> {
+  await appendProgressLog(progress, result)
+
+  counts.done += 1
+
+  if (result.status === EvaluatedStatus.matched) counts.matches += 1
+}
+
+function matchCountText(count: number): string {
+  return count === 1 ? '1 match' : `${count} matches`
+}
+
+// Link Processor
+
+async function processLink(
+  link: ArticleLink,
+  config: Config,
+  progress: Record<string, EvaluatedArticle>,
+  counts: { done: number; matches: number }
+): Promise<void> {
+  let tokens = 0
+
+  // Stage 1: Optimized token-saving screen on title and summary only.
+  if (link.summary) {
+    const summaryResult = await evaluateSummary(link.title, link.summary, {
+      model: config.screeningModel ?? config.evaluationModel,
+      criteria: config.criteria
+    })
+
+    tokens += summaryResult.tokens ?? 0
+
+    if (summaryResult.status === 'rejected') {
+      await recordResult(progress, counts, {
+        ...link,
+        status: EvaluatedStatus.summary_rejected,
+        reason: summaryResult.reason,
+        ...(tokens > 0 && { tokens })
+      })
+
+      return
+    }
+  }
+
+  // Stage 2: Full article fetch and evaluation.
+  const fetchResult = await fetchArticleText(link.url)
+
+  if (!fetchResult.ok) {
+    await recordResult(progress, counts, {
+      ...link,
+      status: EvaluatedStatus.fetch_failed,
+      reason: fetchResult.reason,
+      ...(tokens > 0 && { tokens })
+    })
+
+    return
+  }
+
+  const evaluateResult = await evaluateArticle(fetchResult.text, {
+    model: config.evaluationModel,
+    criteria: config.criteria
+  })
+
+  tokens += evaluateResult.tokens ?? 0
+
+  await recordResult(progress, counts, {
+    ...link,
+    status: evaluateResult.status,
+    reason: evaluateResult.reason,
+    ...(tokens > 0 && { tokens })
+  })
+}
+
+// Main
 
 async function main(): Promise<void> {
   const config = await loadConfig()
@@ -65,92 +146,21 @@ async function main(): Promise<void> {
 
       progressInterval = setInterval(() => {
         if (spinner) {
-          spinner.text = `Evaluating... ${counts.done} done, ${counts.matches} ${counts.matches === 1 ? 'match' : 'matches'}`
+          spinner.text = `Evaluating... ${counts.done} done, ${matchCountText(counts.matches)}`
         }
       }, 400)
     }
 
     // Process one batch of links at a time. Allow full parallelism so the batch completes before the next scrape batch.
     const limit = pLimit(Math.max(1, linksToProcess.length))
-
-    const pending = linksToProcess.map(link =>
-      limit(async () => {
-        let tokens = 0
-
-        // Stage 1: Optimized token-saving screen on title and summary only.
-        if (link.summary) {
-          const summaryResult = await evaluateSummary(link.title, link.summary, {
-            model: config.screeningModel ?? config.evaluationModel,
-            criteria: config.criteria
-          })
-
-          tokens += summaryResult.tokens ?? 0
-
-          if (summaryResult.status === 'rejected') {
-            const result: EvaluatedArticle = {
-              ...link,
-              status: EvaluatedStatus.summary_rejected,
-              reason: summaryResult.reason,
-              ...(tokens > 0 && { tokens })
-            }
-
-            await appendProgressLog(progress, result)
-
-            counts.done += 1
-
-            return
-          }
-        }
-
-        // Stage 2: Full article fetch and evaluation.
-        const fetchResult = await fetchArticleText(link.url)
-
-        if (!fetchResult.ok) {
-          const result: EvaluatedArticle = {
-            ...link,
-            status: EvaluatedStatus.fetch_failed,
-            reason: fetchResult.reason,
-            ...(tokens > 0 && { tokens })
-          }
-
-          await appendProgressLog(progress, result)
-
-          counts.done += 1
-
-          return
-        }
-
-        const evaluateResult = await evaluateArticle(fetchResult.text, {
-          model: config.evaluationModel,
-          criteria: config.criteria
-        })
-
-        tokens += evaluateResult.tokens ?? 0
-
-        const result: EvaluatedArticle = {
-          ...link,
-          status: evaluateResult.status,
-          reason: evaluateResult.reason,
-          ...(tokens > 0 && { tokens })
-        }
-
-        await appendProgressLog(progress, result)
-
-        counts.done += 1
-
-        if (result.status === EvaluatedStatus.matched) counts.matches += 1
-      })
-    )
+    const pending = linksToProcess.map(link => limit(() => processLink(link, config, progress, counts)))
 
     await Promise.all(pending)
   }
 
   if (progressInterval) clearInterval(progressInterval)
 
-  if (spinner)
-    spinner.succeed(
-      `Evaluated ${counts.done} articles, ${counts.matches} ${counts.matches === 1 ? 'match' : 'matches'}`
-    )
+  if (spinner) spinner.succeed(`Evaluated ${counts.done} articles, ${matchCountText(counts.matches)}`)
 
   // Output is the full set of matched articles from the in-memory progress map (all evaluated this run, keyed by normalized URL).
   const matching = Object.values(progress).filter(record => record.status === EvaluatedStatus.matched)
