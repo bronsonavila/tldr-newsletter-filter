@@ -11,8 +11,8 @@ Finds [TLDR newsletter](https://tldr.tech/) articles that match user-defined cri
 
 ## Evaluation pipeline
 
-- Stage 1 (screener): When the archive has a title and summary, the app calls the screening model with only those. If the model says the topic is off-criteria, the link is rejected without fetching the full page (saves tokens and time).
-- Stage 2 (evaluator): The full article (capped at 120k chars) is fetched and the main text is extracted (capped at 100k chars). The evaluation model evaluates against your criteria using only the document content.
+- Stage 1 (screener) — Runs when `screeningModel` is set. Uses only the article's title and summary to decide if the topic could relate to your criteria. Rejected links are not fetched (saves tokens and time). Omit `screeningModel` to skip Stage 1 and send every link to Stage 2.
+- Stage 2 (evaluator): The full article (capped at 120k characters) is fetched and the main text is extracted (capped at 100k characters). The evaluation model evaluates the document against your criteria.
 
 ## Prerequisites
 
@@ -35,15 +35,15 @@ OPENROUTER_API_KEY=your-api-key
 
 Config schema (`config.json`):
 
-| Field             | Type     | Description                                                                                                                                                                                      |
-| ----------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `newsletters`     | string[] | TLDR slugs to scrape (non-empty).                                                                                                                                                                |
-| `dateStart`       | string   | Start date YYYY-MM-DD.                                                                                                                                                                           |
-| `dateEnd`         | string   | End date YYYY-MM-DD.                                                                                                                                                                             |
-| `criteria`        | string   | Matching criteria that the article must satisfy. Single markdown-formatted string. The app wraps this in a system instruction prompt. Must be non-empty.                                         |
-| `evaluationModel` | string   | OpenRouter model ID for Stage 2 full article evaluation (e.g. `anthropic/claude-sonnet-4.5`). Also used for Stage 1 if `screeningModel` is not specified.                                        |
-| `screeningModel`  | string   | Optional. OpenRouter model ID for Stage 1 summary screening (e.g. `google/gemini-3-flash-preview`). Defaults to `evaluationModel` if omitted. Use a cheaper/faster model here to optimize costs. |
-| `outputFormat`    | string   | Optional. One of `md`, `json`, or `both`. Defaults to `json` if missing or invalid.                                                                                                              |
+| Field             | Type     | Description                                                                                                                                                                                               |
+| ----------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `newsletters`     | string[] | TLDR slugs to scrape (non-empty).                                                                                                                                                                         |
+| `dateStart`       | string   | Start date YYYY-MM-DD.                                                                                                                                                                                    |
+| `dateEnd`         | string   | End date YYYY-MM-DD.                                                                                                                                                                                      |
+| `criteria`        | string   | Matching criteria that the article must satisfy. Single markdown-formatted string. The app wraps this in a system instruction prompt. Must be non-empty.                                                  |
+| `evaluationModel` | string   | OpenRouter model ID for Stage 2 full article evaluation (e.g., `anthropic/claude-sonnet-4.5`). Required.                                                                                                  |
+| `screeningModel`  | string   | Optional. OpenRouter model ID for Stage 1 summary screening (e.g., `google/gemini-3-flash-preview`). If omitted, Stage 1 is skipped and every article is fetched and evaluated with the evaluation model. |
+| `outputFormat`    | string   | Optional. One of `md`, `json`, or `both`. Defaults to `json` if missing or invalid.                                                                                                                       |
 
 Known TLDR slugs (any string is allowed; these are for reference):
 

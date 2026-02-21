@@ -40,10 +40,10 @@ async function processLink(
 ): Promise<void> {
   let tokens = 0
 
-  // Stage 1: Optimized token-saving screen on title and summary only.
-  if (link.summary) {
+  // Stage 1: Optional token-saving screen on title and summary only. Skipped when screeningModel is not set.
+  if (link.summary && config.screeningModel) {
     const summaryResult = await evaluateSummary(link.title, link.summary, {
-      model: config.screeningModel ?? config.evaluationModel,
+      model: config.screeningModel,
       criteria: config.criteria
     })
 
