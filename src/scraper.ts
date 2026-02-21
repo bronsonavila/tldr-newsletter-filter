@@ -1,0 +1,144 @@
+import * as cheerio from 'cheerio'
+import type { ArticleLink } from './types.js'
+
+const TLDR_BASE = 'https://tldr.tech'
+const SPONSOR_MARKER = '(Sponsor)'
+const USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+
+function* dateRange(start: string, end: string): Generator<string> {
+  const startDate = new Date(start)
+  const endDate = new Date(end)
+
+  if (startDate > endDate) {
+    throw new Error(`Invalid date range: start (${start}) is after end (${end})`)
+  }
+
+  const current = new Date(startDate)
+
+  while (current <= endDate) {
+    yield current.toISOString().slice(0, 10)
+
+    current.setUTCDate(current.getUTCDate() + 1) // Use UTC date math to avoid DST issues.
+  }
+}
+
+function* dateSourcePairs(
+  newsletters: string[],
+  startDate: string,
+  endDate: string
+): Generator<{ date: string; source: string }> {
+  for (const date of dateRange(startDate, endDate)) {
+    for (const source of newsletters) {
+      yield { date, source }
+    }
+  }
+}
+
+async function fetchArchivePage(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, {
+      headers: { 'User-Agent': USER_AGENT },
+      signal: AbortSignal.timeout(15_000)
+    })
+
+    if (!response.ok) return null
+
+    return await response.text()
+  } catch {
+    return null
+  }
+}
+
+// Tied to TLDR archive HTML: Link wraps an h3. Summary exists in the following sibling with class .newsletter-html.
+function extractLinksFromHtml(html: string, date: string, source: string): ArticleLink[] {
+  const $ = cheerio.load(html)
+  const links: ArticleLink[] = []
+
+  $('a').each((_, element) => {
+    const $a = $(element)
+    const $h3 = $a.children('h3').first()
+
+    if ($h3.length !== 1) return
+
+    const href = $a.attr('href')
+
+    if (!href?.startsWith('http')) return
+
+    const title = $a.text().trim()
+
+    if (!title || title.includes(SPONSOR_MARKER)) return
+
+    const summary = $a.next('.newsletter-html').text().trim() || undefined
+
+    links.push({ title, url: href, date, source, ...(summary && { summary }) })
+  })
+
+  return links
+}
+
+export interface ScrapeOptions {
+  newsletters: string[]
+  dateStart: string
+  dateEnd: string
+  onProgress?: (date: string, source: string, count: number) => void
+}
+
+export async function* scrapeArchives(options: ScrapeOptions): AsyncGenerator<ArticleLink> {
+  const { newsletters, dateStart, dateEnd } = options
+  const seen = new Set<string>() // Same link can appear on multiple archive pages; skip duplicates.
+
+  for (const { date, source } of dateSourcePairs(newsletters, dateStart, dateEnd)) {
+    const url = `${TLDR_BASE}/${source}/${date}`
+    const html = await fetchArchivePage(url)
+
+    if (!html) continue
+
+    const links = extractLinksFromHtml(html, date, source)
+
+    options.onProgress?.(date, source, links.length)
+
+    for (const link of links) {
+      if (seen.has(link.url)) continue
+
+      seen.add(link.url)
+
+      yield link
+    }
+  }
+}
+
+export interface ArchiveBatch {
+  date: string
+  source: string
+  links: ArticleLink[]
+}
+
+export async function* scrapeArchivesBatched(options: ScrapeOptions): AsyncGenerator<ArchiveBatch> {
+  const { newsletters, dateStart, dateEnd } = options
+  const seen = new Set<string>() // Same link can appear on multiple archive pages; skip duplicates.
+
+  for (const { date, source } of dateSourcePairs(newsletters, dateStart, dateEnd)) {
+    const url = `${TLDR_BASE}/${source}/${date}`
+    const html = await fetchArchivePage(url)
+
+    if (!html) continue
+
+    const allLinks = extractLinksFromHtml(html, date, source)
+    const newLinks: ArticleLink[] = []
+
+    for (const link of allLinks) {
+      if (seen.has(link.url)) continue
+
+      seen.add(link.url)
+
+      newLinks.push(link)
+    }
+
+    options.onProgress?.(date, source, newLinks.length)
+
+    if (newLinks.length > 0) {
+      yield { date, source, links: newLinks }
+    }
+  }
+}
