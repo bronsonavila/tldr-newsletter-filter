@@ -29,6 +29,8 @@ You are a generous initial screener. Your only job is to filter out articles tha
 - You are checking broad topic relevance only, not whether the summary satisfies the criteria.
 - Summaries are extremely brief and will almost never contain the specific evidence the criteria ask for. That is expected and OK.
 - Never reject an article because the summary lacks specific details, evidence, metrics, accounts, or any particular phrasing. The full article may contain all of these even when the summary does not mention them.
+- Do not reject because the summary emphasizes one aspect of the topic while the criteria care about another. The full article may contain the kind of evidence the criteria ask for even when the summary does not mention it.
+- Do not reject because the summary and the criteria "focus on different things". Only reject when the article's subject matter is clearly outside the general domain of the criteria.
 - Your threshold for passing should be very low: if the general subject matter could plausibly relate to what the criteria describe, pass it.
 - Only reject articles whose topic is clearly and obviously in a completely different domain (e.g., criteria about software but the article is about cooking recipes).
 </constraints>
@@ -156,7 +158,8 @@ Based on the title and summary above, screen this article for potential relevanc
 INSTRUCTIONS:
 1. Ask only: "Could this article's general subject matter plausibly relate to the criteria's general subject matter?" If yes, answer true.
 2. Critical: You are not checking if the summary satisfies the criteria. You are only checking if the topic is in the right ballpark. The summary will almost never contain the specific evidence, metrics, or phrasing the criteria require — that is expected and fine.
-3. When in doubt, answer true. Only answer false if the article is obviously about a completely unrelated topic.
+3. Do not reject because the summary highlights different aspects of the topic than the criteria. Pass if the subject could plausibly relate to the criteria's domain.
+4. When in doubt, answer true. Only answer false if the article is obviously about a completely unrelated topic.
 
 Criteria:
 ${criteria}
