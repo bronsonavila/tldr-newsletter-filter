@@ -14,14 +14,6 @@ import type { ArticleLink, EvaluatedArticle } from './types.js'
 async function main(): Promise<void> {
   const config = await loadConfig()
 
-  const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY
-
-  if (!apiKey) {
-    console.error('Set GEMINI_API_KEY or GOOGLE_API_KEY')
-
-    process.exit(1)
-  }
-
   // Start fresh each run (no resume); progress is for within-run dedupe and per-result persistence to the log file.
   const progress: Record<string, EvaluatedArticle> = {}
 
@@ -88,7 +80,7 @@ async function main(): Promise<void> {
         // Stage 1: Optimized token-saving screen on title and summary only.
         if (link.summary) {
           const summaryResult = await evaluateSummary(link.title, link.summary, {
-            model: config.model,
+            model: config.screeningModel ?? config.evaluationModel,
             criteria: config.criteria
           })
 
@@ -129,7 +121,7 @@ async function main(): Promise<void> {
         }
 
         const evaluateResult = await evaluateArticle(fetchResult.text, {
-          model: config.model,
+          model: config.evaluationModel,
           criteria: config.criteria
         })
 

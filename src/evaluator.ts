@@ -1,5 +1,5 @@
 import { EvaluatedStatus } from './types.js'
-import { GoogleGenAI } from '@google/genai'
+import OpenAI from 'openai'
 
 export type EvaluateResult =
   | { status: 'matched'; reason: string; tokens?: number }
@@ -13,27 +13,43 @@ export type SummaryEvaluateResult =
 
 // Stage 1 screening: Ballpark relevance only. Avoids full-article calls for clearly off-topic items.
 const SUMMARY_SYSTEM_INSTRUCTION = `<role>
-You are an initial screener for articles. Your job is to decide whether an article's core topic is in the right ballpark for the criteria, using only the title and summary.
+You are a generous initial screener. Your only job is to filter out articles that are obviously off-topic. When in doubt, pass the article through.
 </role>
 
 <constraints>
-- The summary is brief and will not contain every detail the criteria ask for. That is expected.
-- Focus on the core topic of the article. Does it broadly fall within the subject area the criteria describe?
-- Do not require the summary to mention specific details. Those details may exist in the full article even if the summary omits them.
-- Do reject articles whose core topic is clearly in a different domain when the criteria are about something else.
-</constraints>`
+- You are checking broad topic relevance only, not whether the summary satisfies the criteria.
+- Summaries are extremely brief and will almost never contain the specific evidence the criteria ask for. That is expected and OK.
+- Never reject an article because the summary lacks specific details, evidence, metrics, accounts, or any particular phrasing. The full article may contain all of these even when the summary does not mention them.
+- Your threshold for passing should be very low: if the general subject matter could plausibly relate to what the criteria describe, pass it.
+- Only reject articles whose topic is clearly and obviously in a completely different domain (e.g., criteria about software but the article is about cooking recipes).
+</constraints>
 
-// Stage 2: Strictly grounded article evaluator.
+<output_format>
+Return your response as JSON with these exact fields:
+{
+  "potentially_relevant": boolean,
+  "reason": "Brief explanation (1-2 sentences)"
+}
+</output_format>`
+
+// Stage 2: Grounded but reasonable article evaluator.
 const ARTICLE_SYSTEM_INSTRUCTION = `<role>
-You are a strictly grounded article evaluator. You are precise and analytical.
+You are an analytical article evaluator. Your job is to determine if the provided article satisfies the user's criteria based on the text.
 </role>
 
 <constraints>
-- You are a strictly grounded assistant limited to the information provided in the User Context.
-- In your answers, rely only on the facts that are directly mentioned in that context. You must not access or utilize your own knowledge or common sense to answer.
-- Do not assume or infer from the provided facts; simply report them exactly as they appear.
-- Treat the provided context as the absolute limit of truth; any facts or details that are not directly mentioned in the context must be considered completely untruthful and completely unsupported.
-</constraints>`
+- You are limited to the information provided in the article text. Do not invent facts that are not present in the article.
+- Use reasonable deduction and common sense to determine if the facts presented in the article satisfy the intent of the criteria.
+- Do not demand exact phrasing or overly literal matches. Synthesize the information in the article to evaluate whether it holistically meets the requirements.
+</constraints>
+
+<output_format>
+Return your response as JSON with these exact fields:
+{
+  "satisfies_criteria": boolean,
+  "reason": "Concise explanation (1-4 sentences)"
+}
+</output_format>`
 
 export interface EvaluateOptions {
   model: string
@@ -41,49 +57,22 @@ export interface EvaluateOptions {
 }
 
 function getApiKey(): string {
-  const key = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY
+  const key = process.env.OPENROUTER_API_KEY
 
-  if (!key) throw new Error('Set GEMINI_API_KEY or GOOGLE_API_KEY')
+  if (!key) throw new Error('Set OPENROUTER_API_KEY')
 
   return key
 }
 
-let client: GoogleGenAI | null = null
+let client: OpenAI | null = null
 
-function getClient(): GoogleGenAI {
-  if (!client) client = new GoogleGenAI({ apiKey: getApiKey() })
+function getClient(): OpenAI {
+  if (!client) {
+    client = new OpenAI({ apiKey: getApiKey(), baseURL: 'https://openrouter.ai/api/v1' })
+  }
 
   return client
 }
-
-// Stage 1 summary screening response schema.
-const SUMMARY_RESPONSE_SCHEMA = {
-  type: 'object',
-  properties: {
-    potentially_relevant: {
-      type: 'boolean',
-      description:
-        "Whether the article's core topic is in the right ballpark for the criteria. Lenient on missing details, strict on wrong topic."
-    },
-    reason: { type: 'string', description: 'Brief explanation (1-2 sentences).', maxLength: 300 }
-  },
-  required: ['potentially_relevant', 'reason']
-} as const
-
-// Stage 2 structured evaluation response schema.
-const ARTICLE_RESPONSE_SCHEMA = {
-  type: 'object',
-  properties: {
-    satisfies_criteria: { type: 'boolean', description: 'Whether the article satisfies the criteria.' },
-    reason: {
-      type: 'string',
-      description:
-        'Concise explanation of why the article does or does not satisfy the criteria (1-4 sentences; keep it tight, with at most 4 for matches).',
-      maxLength: 500
-    }
-  },
-  required: ['satisfies_criteria', 'reason']
-} as const
 
 function parseStructuredResponse(text: string | undefined): EvaluateResult {
   if (!text?.trim()) {
@@ -163,9 +152,9 @@ Summary: ${summary}
 Based on the title and summary above, screen this article for potential relevance.
 
 INSTRUCTIONS:
-1. Ask: "Is this article's core topic in the right ballpark for the criteria?" If yes, answer true.
-2. Do not reject an article just because the summary lacks specific detials. Summaries are brief — the full article may contain those details.
-3. Do reject articles whose topic is clearly in a different domain from what the criteria describe.
+1. Ask only: "Could this article's general subject matter plausibly relate to the criteria's general subject matter?" If yes, answer true.
+2. Critical: You are not checking if the summary satisfies the criteria. You are only checking if the topic is in the right ballpark. The summary will almost never contain the specific evidence, metrics, or phrasing the criteria require — that is expected and fine.
+3. When in doubt, answer true. Only answer false if the article is obviously about a completely unrelated topic.
 
 Criteria:
 ${criteria}
@@ -180,18 +169,17 @@ export async function evaluateSummary(
   const client = getClient()
   const userContent = buildSummaryUserContent(title, summary, options.criteria)
 
-  const response = await client.models.generateContent({
+  const response = await client.chat.completions.create({
     model: options.model,
-    contents: userContent,
-    config: {
-      systemInstruction: SUMMARY_SYSTEM_INSTRUCTION,
-      responseMimeType: 'application/json',
-      responseJsonSchema: SUMMARY_RESPONSE_SCHEMA
-    }
+    messages: [
+      { role: 'system', content: SUMMARY_SYSTEM_INSTRUCTION },
+      { role: 'user', content: userContent }
+    ],
+    response_format: { type: 'json_object' }
   })
 
-  const result = parseSummaryResponse(response.text)
-  const tokens = response.usageMetadata?.totalTokenCount
+  const result = parseSummaryResponse(response.choices[0]?.message?.content ?? undefined)
+  const tokens = response.usage?.total_tokens
 
   return { ...result, ...(tokens !== undefined && { tokens }) }
 }
@@ -205,8 +193,11 @@ ${raw}
 </context>
 
 <task>
-Based on the entire document above, determine if it satisfies the following criteria:
+Based on the entire document above, determine if it satisfies the following criteria.
 
+Interpret the criteria reasonably and holistically. Do not reject an article based on an overly literal or pedantic reading of a single requirement if the core intent of the criteria is met.
+
+Criteria:
 ${criteria}
 </task>`
 }
@@ -215,18 +206,17 @@ export async function evaluateArticle(articleText: string, options: EvaluateOpti
   const client = getClient()
   const userContent = buildUserContent(articleText, options.criteria)
 
-  const response = await client.models.generateContent({
+  const response = await client.chat.completions.create({
     model: options.model,
-    contents: userContent,
-    config: {
-      systemInstruction: ARTICLE_SYSTEM_INSTRUCTION,
-      responseMimeType: 'application/json',
-      responseJsonSchema: ARTICLE_RESPONSE_SCHEMA
-    }
+    messages: [
+      { role: 'system', content: ARTICLE_SYSTEM_INSTRUCTION },
+      { role: 'user', content: userContent }
+    ],
+    response_format: { type: 'json_object' }
   })
 
-  const result = parseStructuredResponse(response.text)
-  const tokens = response.usageMetadata?.totalTokenCount
+  const result = parseStructuredResponse(response.choices[0]?.message?.content ?? undefined)
+  const tokens = response.usage?.total_tokens
 
   return { ...result, ...(tokens !== undefined && { tokens }) }
 }

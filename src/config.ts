@@ -8,7 +8,8 @@ export interface Config {
   dateStart: string
   dateEnd: string
   criteria: string
-  model: string
+  evaluationModel: string
+  screeningModel?: string
   outputFormat?: OutputFormat
 }
 
@@ -77,10 +78,16 @@ export async function loadConfig(): Promise<Config> {
     throw new Error('Config must have a non-empty string "criteria"')
   }
 
-  const model = configObject.model
+  const evaluationModel = configObject.evaluationModel
 
-  if (typeof model !== 'string' || !model.trim()) {
-    throw new Error('Config must have a non-empty string "model"')
+  if (typeof evaluationModel !== 'string' || !evaluationModel.trim()) {
+    throw new Error('Config must have a non-empty string "evaluationModel"')
+  }
+
+  const screeningModel = configObject.screeningModel
+
+  if (screeningModel !== undefined && (typeof screeningModel !== 'string' || !screeningModel.trim())) {
+    throw new Error('Config "screeningModel" must be a non-empty string if provided')
   }
 
   const outputFormat = configObject.outputFormat
@@ -95,7 +102,8 @@ export async function loadConfig(): Promise<Config> {
     dateStart: dateStart as string,
     dateEnd: dateEnd as string,
     criteria: (criteria as string).trim(),
-    model: (model as string).trim(),
+    evaluationModel: (evaluationModel as string).trim(),
+    ...(screeningModel && { screeningModel: (screeningModel as string).trim() }),
     outputFormat: resolvedOutputFormat
   }
 }

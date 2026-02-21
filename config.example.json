@@ -2,7 +2,8 @@
   "newsletters": ["ai", "dev"],
   "dateStart": "2026-01-01",
   "dateEnd": "2026-01-31",
-  "model": "gemini-3-flash-preview",
-  "criteria": "The article must satisfy all of the following criteria:\n- Personal Experience: It is a first-hand account from a developer or team (e.g., 'This team found,' 'I have been using,' 'I built').\n- Rarely Writing Manual Code: The article states or strongly implies that AI coding agents are now so accurate that the human rarely performs manual implementation anymore.\n- Clear Productivity Gains: The developer describes in quantitative terms materially faster delivery, higher throughput, or meaningful time savings due to AI assistance.",
+  "evaluationModel": "anthropic/claude-sonnet-4.5",
+  "screeningModel": "google/gemini-3-flash-preview",
+  "criteria": "The article must satisfy all of the following criteria:\n- Personal Experience: It is a first-hand account from a developer or team.\n- Rarely Writing Manual Code: The article states or implies that AI coding agents are now so accurate that the human rarely performs manual implementation.\n- Clear Productivity Gains: The developer describes in quantitative terms materially faster delivery, higher throughput, or meaningful time savings due to AI assistance.",
   "outputFormat": "both"
 }

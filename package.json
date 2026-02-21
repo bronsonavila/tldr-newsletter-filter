@@ -12,11 +12,11 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@google/genai": "1.42.0",
     "@mozilla/readability": "0.6.0",
     "cheerio": "1.2.0",
     "dotenv": "17.3.1",
     "jsdom": "25.0.1",
+    "openai": "6.22.0",
     "ora": "9.3.0",
     "p-limit": "7.3.0"
   },

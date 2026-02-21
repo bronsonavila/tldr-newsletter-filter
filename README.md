@@ -1,6 +1,6 @@
 # TLDR Newsletter Filter
 
-Finds [TLDR newsletter](https://tldr.tech/) articles that match user-defined criteria using Google’s Gemini API. You choose which newsletters to scrape, the date range, and the matching criteria.
+Finds [TLDR newsletter](https://tldr.tech/) articles that match user-defined criteria using [OpenRouter](https://openrouter.ai/). You choose which newsletters to scrape, the date range, the matching criteria, and which AI models to use for evaluation.
 
 ## What it does
 
@@ -11,13 +11,13 @@ Finds [TLDR newsletter](https://tldr.tech/) articles that match user-defined cri
 
 ## Evaluation pipeline
 
-- Stage 1 (screener): When the archive has a title and summary, the app calls Gemini with only those. If the model says the topic is off-criteria, the link is rejected without fetching the full page (saves tokens and time).
-- Stage 2 (strict evaluator): The full article (capped at 120k chars) is fetched and the main text is extracted (capped at 100k chars). Gemini evaluates against your criteria using only the document content.
+- Stage 1 (screener): When the archive has a title and summary, the app calls the screening model with only those. If the model says the topic is off-criteria, the link is rejected without fetching the full page (saves tokens and time).
+- Stage 2 (evaluator): The full article (capped at 120k chars) is fetched and the main text is extracted (capped at 100k chars). The evaluation model evaluates against your criteria using only the document content.
 
 ## Prerequisites
 
 - Node.js 20+
-- A Gemini API key ([Google AI Studio](https://aistudio.google.com/api-keys))
+- An OpenRouter API key ([OpenRouter Settings](https://openrouter.ai/settings/keys))
 
 ## Config
 
@@ -30,21 +30,20 @@ cp config.example.json config.json
 Set your API key in `.env`:
 
 ```
-GEMINI_API_KEY=your-api-key
+OPENROUTER_API_KEY=your-api-key
 ```
-
-The app also accepts `GOOGLE_API_KEY` instead of `GEMINI_API_KEY`.
 
 Config schema (`config.json`):
 
-| Field          | Type     | Description                                                                                                                                              |
-| -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `newsletters`  | string[] | TLDR slugs to scrape (non-empty).                                                                                                                        |
-| `dateStart`    | string   | Start date YYYY-MM-DD.                                                                                                                                   |
-| `dateEnd`      | string   | End date YYYY-MM-DD.                                                                                                                                     |
-| `criteria`     | string   | Matching criteria that the article must satisfy. Single markdown-formatted string. The app wraps this in a system instruction prompt. Must be non-empty. |
-| `model`        | string   | Gemini model ID (e.g. `gemini-3-flash-preview`).                                                                                                         |
-| `outputFormat` | string   | Optional. One of `md`, `json`, or `both`. Defaults to `json` if missing or invalid.                                                                      |
+| Field             | Type     | Description                                                                                                                                                                                      |
+| ----------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `newsletters`     | string[] | TLDR slugs to scrape (non-empty).                                                                                                                                                                |
+| `dateStart`       | string   | Start date YYYY-MM-DD.                                                                                                                                                                           |
+| `dateEnd`         | string   | End date YYYY-MM-DD.                                                                                                                                                                             |
+| `criteria`        | string   | Matching criteria that the article must satisfy. Single markdown-formatted string. The app wraps this in a system instruction prompt. Must be non-empty.                                         |
+| `evaluationModel` | string   | OpenRouter model ID for Stage 2 full article evaluation (e.g. `anthropic/claude-sonnet-4.5`). Also used for Stage 1 if `screeningModel` is not specified.                                        |
+| `screeningModel`  | string   | Optional. OpenRouter model ID for Stage 1 summary screening (e.g. `google/gemini-3-flash-preview`). Defaults to `evaluationModel` if omitted. Use a cheaper/faster model here to optimize costs. |
+| `outputFormat`    | string   | Optional. One of `md`, `json`, or `both`. Defaults to `json` if missing or invalid.                                                                                                              |
 
 Known TLDR slugs (any string is allowed; these are for reference):
 
@@ -74,7 +73,8 @@ Input (`config.json`):
   "newsletters": ["ai", "dev"],
   "dateStart": "2025-10-07",
   "dateEnd": "2025-10-25",
-  "model": "gemini-3-flash-preview",
+  "evaluationModel": "anthropic/claude-sonnet-4.5",
+  "screeningModel": "google/gemini-3-flash-preview",
   "criteria": "The article must satisfy all of the following:\n- Personal Experience: First-hand account from a developer or team.\n- Rarely Writing Manual Code: Strongly implies AI agents now handle most implementation.\n- Clear Productivity Gains: Quantitative delivery, throughput, or time savings from AI.",
   "outputFormat": "both"
 }
