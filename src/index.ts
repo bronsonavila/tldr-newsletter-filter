@@ -1,16 +1,17 @@
 import 'dotenv/config'
-import { EvaluatedStatus } from './types.js'
-import { evaluateArticle, evaluateSummary } from './evaluator.js'
-import { fetchArticleText } from './articleFetcher.js'
-import { initProgressLog, appendProgressLog } from './state.js'
-import { loadConfig } from './config.js'
-import { normalizedUrl } from './url.js'
-import { scrapeArchivesBatched } from './scraper.js'
-import { writeOutput } from './output.js'
 import ora from 'ora'
 import pLimit from 'p-limit'
-import type { ArticleLink, EvaluatedArticle } from './types.js'
 import type { Config } from './config.js'
+import { loadConfig } from './config.js'
+import { SPINNER_INTERVAL_MS } from './constants.js'
+import { writeOutput } from './output/output.js'
+import { appendProgressLog, initProgressLog } from './output/progressLog.js'
+import { fetchArticleText } from './pipeline/articleFetcher.js'
+import { evaluateArticle, evaluateSummary } from './pipeline/evaluator.js'
+import { scrapeArchivesBatched } from './pipeline/scraper.js'
+import type { ArticleLink, EvaluatedArticle } from './types.js'
+import { EVALUATED_STATUS } from './types.js'
+import { normalizedUrl } from './utils/url.js'
 
 // Helpers
 
@@ -23,7 +24,7 @@ async function recordResult(
 
   counts.done += 1
 
-  if (result.status === EvaluatedStatus.matched) counts.matches += 1
+  if (result.status === EVALUATED_STATUS.matched) counts.matches += 1
 }
 
 function matchCountText(count: number): string {
@@ -52,7 +53,7 @@ async function processLink(
     if (summaryResult.status === 'rejected') {
       await recordResult(progress, counts, {
         ...link,
-        status: EvaluatedStatus.summary_rejected,
+        status: EVALUATED_STATUS.summary_rejected,
         reason: summaryResult.reason,
         ...(tokens > 0 && { tokens })
       })
@@ -67,7 +68,7 @@ async function processLink(
   if (!fetchResult.ok) {
     await recordResult(progress, counts, {
       ...link,
-      status: EvaluatedStatus.fetch_failed,
+      status: EVALUATED_STATUS.fetch_failed,
       reason: fetchResult.reason,
       ...(tokens > 0 && { tokens })
     })
@@ -94,6 +95,10 @@ async function processLink(
 
 async function main(): Promise<void> {
   const config = await loadConfig()
+
+  if (!process.env.OPENROUTER_API_KEY?.trim()) {
+    throw new Error('OPENROUTER_API_KEY must be set')
+  }
 
   // Start fresh each run (no resume); progress is for within-run dedupe and per-result persistence to the log file.
   const progress: Record<string, EvaluatedArticle> = {}
@@ -148,7 +153,7 @@ async function main(): Promise<void> {
         if (spinner) {
           spinner.text = `Evaluating... ${counts.done} done, ${matchCountText(counts.matches)}`
         }
-      }, 400)
+      }, SPINNER_INTERVAL_MS)
     }
 
     // Process one batch of links at a time. Allow full parallelism so the batch completes before the next scrape batch.
@@ -163,7 +168,7 @@ async function main(): Promise<void> {
   if (spinner) spinner.succeed(`Evaluated ${counts.done} articles, ${matchCountText(counts.matches)}`)
 
   // Output is the full set of matched articles from the in-memory progress map (all evaluated this run, keyed by normalized URL).
-  const matching = Object.values(progress).filter(record => record.status === EvaluatedStatus.matched)
+  const matching = Object.values(progress).filter(record => record.status === EVALUATED_STATUS.matched)
   const outputPaths = await writeOutput(matching, config)
 
   if (matching.length > 0) {

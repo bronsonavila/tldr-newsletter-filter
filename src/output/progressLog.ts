@@ -1,14 +1,15 @@
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { normalizedUrl } from './url.js'
-import { writeFile, mkdir } from 'node:fs/promises'
-import type { EvaluatedArticle } from './types.js'
+import { OUTPUT_DIR } from '../constants.js'
+import type { EvaluatedArticle } from '../types.js'
+import { normalizedUrl } from '../utils/url.js'
 
-const OUTPUT_DIR = join(process.cwd(), 'output')
+const OUTPUT_DIR_ABSOLUTE = join(process.cwd(), OUTPUT_DIR)
 
-const LOG_PATH = join(OUTPUT_DIR, 'log.json')
+const LOG_PATH = join(OUTPUT_DIR_ABSOLUTE, 'log.json')
 
 async function ensureOutputDir(): Promise<void> {
-  await mkdir(OUTPUT_DIR, { recursive: true })
+  await mkdir(OUTPUT_DIR_ABSOLUTE, { recursive: true })
 }
 
 async function writeProgressLog(progress: Record<string, EvaluatedArticle>): Promise<void> {

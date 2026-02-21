@@ -1,12 +1,13 @@
-import { join } from 'node:path'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { normalizedUrl } from './url.js'
-import type { EvaluatedArticle } from './types.js'
-import type { Config } from './config.js'
+import { join } from 'node:path'
+import type { Config } from '../config.js'
+import { OUTPUT_DIR } from '../constants.js'
+import type { EvaluatedArticle } from '../types.js'
+import { normalizedUrl } from '../utils/url.js'
 
-const OUTPUT_DIR = 'output'
-const MATCHING_MD_FILENAME = 'matching_articles.md'
 const MATCHING_JSON_FILENAME = 'matching_articles.json'
+
+const MATCHING_MD_FILENAME = 'matching_articles.md'
 
 export interface MatchingArticlesOutput {
   metadata: {
@@ -58,21 +59,20 @@ function buildMatchingMarkdown(articles: EvaluatedArticle[], config: Config): st
 ---
 
 `
-  const list =
-    articles
-      .map(article => {
-        const line = `- ${article.date} – [${article.title}](${normalizedUrl(article.url)}) (${article.source})`
-        const reason = article.reason?.trim()
+  const list = articles
+    .map(article => {
+      const line = `- ${article.date} – [${article.title}](${normalizedUrl(article.url)}) (${article.source})`
+      const reason = article.reason?.trim()
 
-        if (!reason) return line
+      if (!reason) return line
 
-        const reasonOneLine = reason.replace(/\s+/g, ' ')
+      const reasonOneLine = reason.replace(/\s+/g, ' ')
 
-        return `${line}\n  - ${reasonOneLine}`
-      })
-      .join('\n\n') + '\n'
+      return `${line}\n  - ${reasonOneLine}`
+    })
+    .join('\n\n')
 
-  return header + list
+  return `${header}${list}\n`
 }
 
 function buildMatchingJson(articles: EvaluatedArticle[], config: Config): MatchingArticlesOutput {

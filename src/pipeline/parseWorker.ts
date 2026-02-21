@@ -1,6 +1,6 @@
-import { JSDOM, VirtualConsole } from 'jsdom'
+import { parentPort, workerData } from 'node:worker_threads'
 import { Readability } from '@mozilla/readability'
-import { workerData, parentPort } from 'node:worker_threads'
+import { JSDOM, VirtualConsole } from 'jsdom'
 import type { FetchResult } from './articleFetcher.js'
 
 const { html, url } = workerData as { html: string; url: string }

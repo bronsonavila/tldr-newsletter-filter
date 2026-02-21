@@ -1,5 +1,7 @@
-import { EvaluatedStatus } from './types.js'
 import OpenAI from 'openai'
+import { MAX_BACKOFF_MS, MAX_PROMPT_LENGTH, MAX_RETRIES } from '../constants.js'
+import { EVALUATED_STATUS } from '../types.js'
+import { delay, RETRYABLE_STATUS_CODES } from '../utils/retry.js'
 
 // Public Types and Options
 
@@ -125,8 +127,8 @@ function parseBooleanJsonResponse<T extends string>(
 function parseStructuredResponse(text: string | undefined): EvaluateResult {
   return parseBooleanJsonResponse(text, {
     field: 'satisfies_criteria',
-    trueStatus: EvaluatedStatus.matched,
-    falseStatus: EvaluatedStatus.not_matched
+    trueStatus: EVALUATED_STATUS.matched,
+    falseStatus: EVALUATED_STATUS.not_matched
   }) as EvaluateResult
 }
 
@@ -159,8 +161,10 @@ ${criteria}
 }
 
 function buildUserContent(articleText: string, criteria: string): string {
-  // Cap prompt size for the model. The article fetcher may provide more, but truncate here for the evaluation request.
-  const raw = articleText.length > 100_000 ? articleText.slice(0, 100_000) + '\n\n[Article truncated.]' : articleText
+  const raw =
+    articleText.length > MAX_PROMPT_LENGTH
+      ? `${articleText.slice(0, MAX_PROMPT_LENGTH)}\n\n[Article truncated.]`
+      : articleText
 
   return `<context>
 ${raw}
@@ -178,6 +182,12 @@ ${criteria}
 
 // Evaluation Orchestration
 
+function isRetryableApiError(error: unknown): boolean {
+  const status = error && typeof error === 'object' && 'status' in error ? (error as { status: number }).status : null
+
+  return typeof status === 'number' && RETRYABLE_STATUS_CODES.has(status)
+}
+
 async function evaluateWithInstructions<T extends { status: string; reason: string }>(options: {
   model: string
   systemInstruction: string
@@ -186,19 +196,37 @@ async function evaluateWithInstructions<T extends { status: string; reason: stri
 }): Promise<T & { tokens?: number }> {
   const client = getClient()
 
-  const response = await client.chat.completions.create({
-    model: options.model,
-    messages: [
-      { role: 'system', content: options.systemInstruction },
-      { role: 'user', content: options.userContent }
-    ],
-    response_format: { type: 'json_object' }
-  })
+  let lastError: unknown
 
-  const result = options.parse(response.choices[0]?.message?.content ?? undefined)
-  const tokens = response.usage?.total_tokens
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await client.chat.completions.create({
+        model: options.model,
+        messages: [
+          { role: 'system', content: options.systemInstruction },
+          { role: 'user', content: options.userContent }
+        ],
+        response_format: { type: 'json_object' }
+      })
 
-  return { ...result, ...(tokens !== undefined && { tokens }) }
+      const result = options.parse(response.choices[0]?.message?.content ?? undefined)
+      const tokens = response.usage?.total_tokens
+
+      return { ...result, ...(tokens !== undefined && { tokens }) }
+    } catch (error) {
+      lastError = error
+
+      if (attempt < MAX_RETRIES && isRetryableApiError(error)) {
+        await delay(Math.min(1000 * 2 ** attempt, MAX_BACKOFF_MS))
+
+        continue
+      }
+
+      throw error
+    }
+  }
+
+  throw lastError
 }
 
 // Public Entry Points

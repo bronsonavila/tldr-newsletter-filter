@@ -6,7 +6,7 @@ export interface ArticleLink {
   summary?: string
 }
 
-export const EvaluatedStatus = {
+export const EVALUATED_STATUS = {
   matched: 'matched',
   not_matched: 'not_matched',
   summary_rejected: 'summary_rejected',
@@ -14,7 +14,7 @@ export const EvaluatedStatus = {
   evaluation_failed: 'evaluation_failed'
 } as const
 
-export type EvaluatedStatus = (typeof EvaluatedStatus)[keyof typeof EvaluatedStatus]
+export type EvaluatedStatus = (typeof EVALUATED_STATUS)[keyof typeof EVALUATED_STATUS]
 
 export interface EvaluatedArticle extends ArticleLink {
   status: EvaluatedStatus

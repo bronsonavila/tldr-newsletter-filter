@@ -1,12 +1,15 @@
 {
   "name": "tldr-newsletter-filter",
   "version": "1.0.0",
-  "description": "Filter TLDR newsletter articles by user-defined criteria using Google Gemini",
+  "description": "Filter TLDR newsletter articles by user-defined criteria using AI models via OpenRouter",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "tsx src/index.ts"
+    "start": "tsx src/index.ts",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "check": "biome check --write ."
   },
   "engines": {
     "node": ">=20"
@@ -18,9 +21,11 @@
     "jsdom": "25.0.1",
     "openai": "6.22.0",
     "ora": "9.3.0",
-    "p-limit": "7.3.0"
+    "p-limit": "7.3.0",
+    "zod": "4.3.6"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.4",
     "@types/jsdom": "27.0.0",
     "@types/node": "22.19.11",
     "tsx": "4.21.0",

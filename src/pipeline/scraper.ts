@@ -1,5 +1,7 @@
 import * as cheerio from 'cheerio'
-import type { ArticleLink } from './types.js'
+import { SCRAPE_TIMEOUT_MS, USER_AGENT } from '../constants.js'
+import type { ArticleLink } from '../types.js'
+import { fetchWithRetry } from '../utils/retry.js'
 
 // Public Types and Options
 
@@ -18,10 +20,9 @@ export interface ArchiveBatch {
 
 // Constants
 
-const TLDR_BASE = 'https://tldr.tech'
 const SPONSOR_MARKER = '(Sponsor)'
-const USER_AGENT =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+
+const TLDR_BASE = 'https://tldr.tech'
 
 // Date Helpers
 
@@ -65,9 +66,9 @@ function dateSourcePairs(
 
 async function fetchArchivePage(url: string): Promise<string | null> {
   try {
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(url, {
       headers: { 'User-Agent': USER_AGENT },
-      signal: AbortSignal.timeout(15_000)
+      signal: AbortSignal.timeout(SCRAPE_TIMEOUT_MS)
     })
 
     if (!response.ok) return null
