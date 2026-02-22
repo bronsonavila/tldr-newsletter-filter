@@ -16,6 +16,10 @@ export interface MatchingArticlesOutput {
     dateEnd: string
     criteria: string
     generatedAt: string
+    models: {
+      evaluation: string
+      screening?: string
+    }
   }
   articles: Array<{
     title: string
@@ -49,11 +53,15 @@ function getGeneratedAt(): string {
 function buildMatchingMarkdown(articles: EvaluatedArticle[], config: Config): string {
   const generatedAt = getGeneratedAt()
   const slugList = config.newsletters.join(', ')
+  const modelsLine = config.screeningModel
+    ? `- **Models:** Evaluation: ${config.evaluationModel}; Screening: ${config.screeningModel}`
+    : `- **Models:** Evaluation: ${config.evaluationModel}`
   const header = `# Matching Articles
 
 - **Newsletters:** ${slugList}
 - **Date range:** ${config.dateStart} to ${config.dateEnd}
 - **Criteria:** ${config.criteria}
+${modelsLine}
 - **Generated:** ${generatedAt}
 
 ---
@@ -82,7 +90,11 @@ function buildMatchingJson(articles: EvaluatedArticle[], config: Config): Matchi
       dateStart: config.dateStart,
       dateEnd: config.dateEnd,
       criteria: config.criteria,
-      generatedAt: getGeneratedAt()
+      generatedAt: getGeneratedAt(),
+      models: {
+        evaluation: config.evaluationModel,
+        ...(config.screeningModel && { screening: config.screeningModel })
+      }
     },
     articles: articles.map(article => ({
       title: article.title,
