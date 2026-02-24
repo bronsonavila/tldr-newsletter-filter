@@ -1,11 +1,11 @@
 import type { Config } from '../config.js'
-import type { ArticleLink, EvaluatedArticle } from '../types.js'
+import type { ArticleLink, ArticleTokens, EvaluatedArticle } from '../types.js'
 import { EVALUATED_STATUS } from '../types.js'
 import { fetchArticleText } from './articleFetcher.js'
 import { evaluateArticle, evaluateSummary } from './evaluator.js'
 
 export async function evaluateLink(link: ArticleLink, config: Config): Promise<EvaluatedArticle> {
-  let tokens = 0
+  const tokens: ArticleTokens = {}
 
   try {
     // Stage 1: Optional token-saving screen on title and summary only. Skipped when models.screening is not set.
@@ -15,14 +15,16 @@ export async function evaluateLink(link: ArticleLink, config: Config): Promise<E
         criteria: config.criteria
       })
 
-      tokens += summaryResult.tokens ?? 0
+      if (summaryResult.tokens) {
+        tokens.screening = summaryResult.tokens
+      }
 
       if (summaryResult.status === 'rejected') {
         return {
           ...link,
           status: EVALUATED_STATUS.summary_rejected,
           reason: summaryResult.reason,
-          ...(tokens > 0 && { tokens })
+          ...(Object.keys(tokens).length > 0 && { tokens })
         }
       }
     }
@@ -35,7 +37,7 @@ export async function evaluateLink(link: ArticleLink, config: Config): Promise<E
         ...link,
         status: EVALUATED_STATUS.fetch_failed,
         reason: fetchResult.reason,
-        ...(tokens > 0 && { tokens })
+        ...(Object.keys(tokens).length > 0 && { tokens })
       }
     }
 
@@ -44,20 +46,22 @@ export async function evaluateLink(link: ArticleLink, config: Config): Promise<E
       criteria: config.criteria
     })
 
-    tokens += evaluateResult.tokens ?? 0
+    if (evaluateResult.tokens) {
+      tokens.evaluation = evaluateResult.tokens
+    }
 
     return {
       ...link,
       status: evaluateResult.status,
       reason: evaluateResult.reason,
-      ...(tokens > 0 && { tokens })
+      ...(Object.keys(tokens).length > 0 && { tokens })
     }
   } catch (error) {
     return {
       ...link,
       status: EVALUATED_STATUS.evaluation_failed,
       reason: error instanceof Error ? error.message : String(error),
-      ...(tokens > 0 && { tokens })
+      ...(Object.keys(tokens).length > 0 && { tokens })
     }
   }
 }

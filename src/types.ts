@@ -20,8 +20,18 @@ export interface ArticleLink {
 
 export type EvaluatedStatus = (typeof EVALUATED_STATUS)[keyof typeof EVALUATED_STATUS]
 
+export interface TokenUsage {
+  input: number
+  output: number
+}
+
+export interface ArticleTokens {
+  screening?: TokenUsage
+  evaluation?: TokenUsage
+}
+
 export interface EvaluatedArticle extends ArticleLink {
   status: EvaluatedStatus
   reason?: string
-  tokens?: number
+  tokens?: ArticleTokens
 }

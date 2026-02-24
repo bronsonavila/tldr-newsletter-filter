@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { Worker } from 'node:worker_threads'
-import { FETCH_TIMEOUT_MS, MAX_ARTICLE_LENGTH, USER_AGENT } from '../constants.js'
+import { FETCH_TIMEOUT_MS, USER_AGENT } from '../constants.js'
 import { fetchWithRetry } from '../utils/retry.js'
 
 // Constants
@@ -61,10 +61,7 @@ export async function fetchArticleText(url: string): Promise<FetchResult> {
 
     if (!result.ok) return result
 
-    // 120k cap after Readability. The classifier further truncates to 100k for the prompt.
-    const final = result.text.length > MAX_ARTICLE_LENGTH ? result.text.slice(0, MAX_ARTICLE_LENGTH) : result.text
-
-    return { ok: true, text: final }
+    return { ok: true, text: result.text }
   } catch (error) {
     return { ok: false, reason: failureReason(error) }
   }

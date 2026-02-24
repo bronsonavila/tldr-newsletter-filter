@@ -18,14 +18,14 @@ export interface MatchingArticlesOutput {
     newsletters: string[]
     dateStart: string
     dateEnd: string
-    criteria: string
+    criteria: string[]
     generatedAt: string
     durationMs: number
     evaluatedCount: number
     matchCount: number
     models: {
-      evaluation: string
       screening?: string
+      evaluation: string
     }
   }
   articles: Array<{
@@ -69,15 +69,10 @@ function formatDurationMs(durationMs: number): string {
   return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`
 }
 
-function formatCriteriaForMarkdown(criteria: string): string {
-  const lines = criteria.split('\n')
+function formatCriteriaForMarkdown(criteria: string[]): string {
+  if (criteria.length === 0) return ''
 
-  if (lines.length <= 1) return criteria
-
-  const first = lines[0]
-  const rest = lines.slice(1).map(line => `  ${line}`)
-
-  return [first, ...rest].join('\n')
+  return `\n${criteria.map((criterion, index) => `  ${index + 1}. ${criterion}`).join('\n')}`
 }
 
 function buildMatchingHeader(
@@ -89,7 +84,7 @@ function buildMatchingHeader(
   const generatedAt = getGeneratedAt()
   const slugList = config.newsletters.join(', ')
   const modelsLine = config.models.screening
-    ? `- **Models:** Evaluation: ${config.models.evaluation}; Screening: ${config.models.screening}`
+    ? `- **Models:** Screening: ${config.models.screening}; Evaluation: ${config.models.evaluation}`
     : `- **Models:** Evaluation: ${config.models.evaluation}`
 
   return `# Matching Articles
@@ -149,8 +144,8 @@ function buildMatchingJson(
       evaluatedCount,
       matchCount,
       models: {
-        evaluation: config.models.evaluation,
-        ...(config.models.screening && { screening: config.models.screening })
+        ...(config.models.screening && { screening: config.models.screening }),
+        evaluation: config.models.evaluation
       }
     },
     articles: articles.map(article => ({

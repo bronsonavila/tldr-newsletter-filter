@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Config } from '../config.js'
-import type { EvaluatedArticle, EvaluatedStatus } from '../types.js'
+import type { ArticleTokens, EvaluatedArticle, EvaluatedStatus, TokenUsage } from '../types.js'
 import { EVALUATED_STATUS } from '../types.js'
 import { normalizedUrl } from '../utils/url.js'
 import { getRunDir } from './runDir.js'
@@ -21,13 +21,13 @@ export interface ProgressLogMetadata {
   newsletters: string[]
   dateStart: string
   dateEnd: string
-  criteria: string
-  models: { evaluation: string; screening?: string }
+  criteria: string[]
+  models: { screening?: string; evaluation: string }
   startedAt: string
   completedAt?: string
   durationMs?: number
   totalArticles: number
-  totalTokens: number
+  totalTokens: Partial<Record<keyof ArticleTokens, TokenUsage>>
   statusCounts: Record<EvaluatedStatus, number>
 }
 
@@ -48,17 +48,40 @@ function defaultStatusCounts(): Record<EvaluatedStatus, number> {
   return counts
 }
 
+function addTokenUsage(
+  totals: Partial<Record<keyof ArticleTokens, TokenUsage>>,
+  key: keyof ArticleTokens,
+  usage: TokenUsage
+): void {
+  const existing = totals[key] ?? { input: 0, output: 0 }
+
+  totals[key] = {
+    input: existing.input + usage.input,
+    output: existing.output + usage.output
+  }
+}
+
 function computeMetadata(progress: Record<string, EvaluatedArticle>): ProgressLogMetadata | null {
   if (runConfig === null || startedAt === null) return null
 
   const totalArticles = Object.keys(progress).length
 
-  let totalTokens = 0
+  const totalTokens: Partial<Record<keyof ArticleTokens, TokenUsage>> = {}
 
   const statusCounts = defaultStatusCounts()
 
   for (const article of Object.values(progress)) {
-    totalTokens += article.tokens ?? 0
+    const tokens = article.tokens
+
+    if (tokens) {
+      for (const key of ['screening', 'evaluation'] as const) {
+        const usage = tokens[key]
+
+        if (usage) {
+          addTokenUsage(totalTokens, key, usage)
+        }
+      }
+    }
 
     statusCounts[article.status] += 1
   }
@@ -69,8 +92,8 @@ function computeMetadata(progress: Record<string, EvaluatedArticle>): ProgressLo
     dateEnd: runConfig.dateEnd,
     criteria: runConfig.criteria,
     models: {
-      evaluation: runConfig.models.evaluation,
-      ...(runConfig.models.screening && { screening: runConfig.models.screening })
+      ...(runConfig.models.screening && { screening: runConfig.models.screening }),
+      evaluation: runConfig.models.evaluation
     },
     startedAt,
     ...(completedAt != null && { completedAt }),
@@ -87,17 +110,19 @@ async function writeProgressLog(progress: Record<string, EvaluatedArticle>): Pro
   const metadata = computeMetadata(progress)
 
   const payload: ProgressLogOutput = {
-    metadata: metadata ?? {
-      newsletters: [],
-      dateStart: '',
-      dateEnd: '',
-      criteria: '',
-      models: { evaluation: '' },
-      startedAt: new Date().toISOString(),
-      totalArticles: 0,
-      totalTokens: 0,
-      statusCounts: defaultStatusCounts()
-    },
+    metadata:
+      metadata ??
+      ({
+        newsletters: [],
+        dateStart: '',
+        dateEnd: '',
+        criteria: [],
+        models: { evaluation: '' },
+        startedAt: new Date().toISOString(),
+        totalArticles: 0,
+        totalTokens: {},
+        statusCounts: defaultStatusCounts()
+      } satisfies ProgressLogMetadata),
     articles: progress
   }
 

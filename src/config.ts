@@ -30,18 +30,18 @@ export const ConfigSchema = z
       .min(1, 'dateRange must have 1 or 2 dates')
       .max(2, 'dateRange must have 1 or 2 dates'),
     criteria: z
-      .string()
-      .min(1, "Config must have a non-empty string 'criteria'")
-      .transform(s => s.trim()),
+      .array(z.string().transform(s => s.trim()))
+      .transform(arr => arr.filter(s => s.length > 0))
+      .refine(arr => arr.length > 0, "Config must have a non-empty array 'criteria'"),
     models: z.object({
-      evaluation: z
-        .string()
-        .min(1, "Config must have a non-empty string 'models.evaluation'")
-        .transform(s => s.trim()),
       screening: z
         .string()
         .transform(s => s.trim() || undefined)
-        .optional()
+        .optional(),
+      evaluation: z
+        .string()
+        .min(1, "Config must have a non-empty string 'models.evaluation'")
+        .transform(s => s.trim())
     }),
     outputFormat: outputFormatEnum.optional().default('json')
   })

@@ -1,4 +1,5 @@
 import OpenAI, { APIConnectionError, APIConnectionTimeoutError } from 'openai'
+import type { TokenUsage } from '../types.js'
 import { RETRYABLE_STATUS_CODES, withRetry } from '../utils/retry.js'
 
 let client: OpenAI | null = null
@@ -50,7 +51,7 @@ export async function evaluateWithInstructions<T extends { status: string; reaso
   systemInstruction: string
   userContent: string
   parse: (content: string | undefined) => T
-}): Promise<T & { tokens?: number }> {
+}): Promise<T & { tokens?: TokenUsage }> {
   const client = getClient()
 
   const response = await withRetry(
@@ -67,7 +68,15 @@ export async function evaluateWithInstructions<T extends { status: string; reaso
   )
 
   const result = options.parse(response.choices?.[0]?.message?.content ?? undefined)
-  const tokens = response.usage?.total_tokens
+  const usage = response.usage
 
-  return { ...result, ...(tokens !== undefined && { tokens }) }
+  const tokens: TokenUsage | undefined =
+    usage && (typeof usage.prompt_tokens === 'number' || typeof usage.completion_tokens === 'number')
+      ? {
+          input: usage.prompt_tokens ?? 0,
+          output: usage.completion_tokens ?? 0
+        }
+      : undefined
+
+  return { ...result, ...(tokens && { tokens }) }
 }

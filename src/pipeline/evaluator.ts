@@ -1,5 +1,5 @@
-import { MAX_PROMPT_LENGTH } from '../constants.js'
-import { EVALUATED_STATUS } from '../types.js'
+import { MAX_ARTICLE_TEXT_LENGTH } from '../constants.js'
+import { EVALUATED_STATUS, type TokenUsage } from '../types.js'
 import { evaluateWithInstructions } from './llmClient.js'
 
 // Constants
@@ -14,6 +14,7 @@ You are a generous initial screener. Your only job is to filter out articles tha
 - Check broad relevance only. Do not judge whether the summary satisfies the criteria.
 - Summaries are brief and may omit what the criteria ask for. Do not reject for missing details, evidence, or different emphasis. The full article may contain it.
 - Pass the article through if it is likely to be relevant to the criteria. Reject only when it is clearly unrelated.
+- Consider the title and summary together as a whole when judging relevance.
 - When in doubt, answer true.
 </constraints>
 
@@ -34,6 +35,7 @@ You are an analytical article evaluator. Your job is to determine if the provide
 - Interpret the criteria reasonably and holistically. Use common sense to determine if the facts presented satisfy the intent of the criteria.
 - Do not demand exact phrasing or overly literal matches. Synthesize the information in the article to evaluate whether it holistically meets the requirements.
 - Do not reject an article based on an overly literal or pedantic reading of a single requirement if the core intent of the criteria is met.
+- Each criterion must be satisfied on its own terms. Do not treat loosely related content as satisfying a criterion just because there is surface-level overlap.
 </constraints>
 
 <output_format>
@@ -47,18 +49,18 @@ Return your response as JSON with these exact fields:
 // Types
 
 export type EvaluateResult =
-  | { status: 'matched'; reason: string; tokens?: number }
-  | { status: 'not_matched'; reason: string; tokens?: number }
-  | { status: 'evaluation_failed'; reason: string; tokens?: number }
+  | { status: 'matched'; reason: string; tokens?: TokenUsage }
+  | { status: 'not_matched'; reason: string; tokens?: TokenUsage }
+  | { status: 'evaluation_failed'; reason: string; tokens?: TokenUsage }
 
 export type SummaryEvaluateResult =
-  | { status: 'passed'; reason: string; tokens?: number }
-  | { status: 'rejected'; reason: string; tokens?: number }
-  | { status: 'evaluation_failed'; reason: string; tokens?: number }
+  | { status: 'passed'; reason: string; tokens?: TokenUsage }
+  | { status: 'rejected'; reason: string; tokens?: TokenUsage }
+  | { status: 'evaluation_failed'; reason: string; tokens?: TokenUsage }
 
 export interface EvaluateOptions {
   model: string
-  criteria: string
+  criteria: string[]
 }
 
 type BooleanParseResult<T> = { status: T; reason: string } | { status: 'evaluation_failed'; reason: string }
@@ -122,7 +124,11 @@ function parseSummaryResponse(text: string | undefined): SummaryEvaluateResult {
   }) as SummaryEvaluateResult
 }
 
-function buildSummaryUserContent(title: string, summary: string, criteria: string): string {
+function formatCriteria(criteria: string[]): string {
+  return criteria.map((criterion, index) => `(${index + 1}) ${criterion}`).join('\n')
+}
+
+function buildSummaryUserContent(title: string, summary: string, criteria: string[]): string {
   return `<context>
 Title: ${title}
 
@@ -133,14 +139,14 @@ Summary: ${summary}
 Screen this article for potential relevance to the following criteria.
 
 Criteria:
-${criteria}
+${formatCriteria(criteria)}
 </task>`
 }
 
-function buildUserContent(articleText: string, criteria: string): string {
+function buildArticleUserContent(articleText: string, criteria: string[]): string {
   const raw =
-    articleText.length > MAX_PROMPT_LENGTH
-      ? `${articleText.slice(0, MAX_PROMPT_LENGTH)}\n\n[Article truncated.]`
+    articleText.length > MAX_ARTICLE_TEXT_LENGTH
+      ? `${articleText.slice(0, MAX_ARTICLE_TEXT_LENGTH)}\n\n[Article truncated.]`
       : articleText
 
   return `<context>
@@ -148,10 +154,10 @@ ${raw}
 </context>
 
 <task>
-Determine if the document above satisfies the following criteria.
+Determine if the document above strictly satisfies all of the following criteria.
 
 Criteria:
-${criteria}
+${formatCriteria(criteria)}
 </task>`
 }
 
@@ -173,7 +179,7 @@ export async function evaluateSummary(
 }
 
 export async function evaluateArticle(articleText: string, options: EvaluateOptions): Promise<EvaluateResult> {
-  const userContent = buildUserContent(articleText, options.criteria)
+  const userContent = buildArticleUserContent(articleText, options.criteria)
 
   return evaluateWithInstructions({
     model: options.model,

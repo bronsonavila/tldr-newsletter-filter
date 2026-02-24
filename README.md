@@ -12,7 +12,7 @@ Finds [TLDR newsletter](https://tldr.tech/) articles that match user-defined cri
 ## Evaluation pipeline
 
 - Stage 1 (screener) — Runs when `models.screening` is set. Uses only the article's title and summary to decide if the topic could relate to your criteria. Rejected links are not fetched (saves tokens and time). Omit `models.screening` to skip Stage 1 and send every link to Stage 2.
-- Stage 2 (evaluator): The full article (capped at 120k characters) is fetched and the main text is extracted (capped at 100k characters). The evaluation model evaluates the document against your criteria.
+- Stage 2 (evaluator): The full article is fetched and the main text is extracted, then capped at 100k characters before being sent to the evaluation model, which evaluates the document against your criteria.
 
 ## Prerequisites
 
@@ -35,19 +35,15 @@ OPENROUTER_API_KEY=your-api-key
 
 Config schema (`config.json`):
 
-| Field               | Type     | Description                                                                                                                                                       |
-| ------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `newsletters`       | string[] | TLDR slugs to scrape (non-empty).                                                                                                                                 |
-| `dateRange`         | string[] | One date (YYYY-MM-DD) for a single day, or two dates for start and end (inclusive). Array length must be 1 or 2.                                                  |
-| `criteria`          | string   | Matching criteria that the article must satisfy. Single markdown-formatted string. The app wraps this in a system instruction prompt. Must be non-empty.          |
-| `models`            | object   | Model IDs by role. Required.                                                                                                                                      |
-| `models.evaluation` | string   | OpenRouter model ID for Stage 2 full article evaluation. Required.                                                                                                |
-| `models.screening`  | string   | Optional. OpenRouter model ID for Stage 1 summary screening. If omitted, Stage 1 is skipped and every article is fetched and evaluated with the evaluation model. |
-| `outputFormat`      | string   | Optional. One of `md`, `json`, or `both`. Defaults to `json` if missing or invalid.                                                                               |
-
-Known TLDR slugs (any string is allowed; these are for reference):
-
-`ai`, `crypto`, `data`, `design`, `dev`, `devops`, `fintech`, `founders`, `hardware`, `infosec`, `it`, `marketing`, `product`, `tech`
+| Field               | Type     | Description                                                                                                                                                                           |
+| ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `newsletters`       | string[] | TLDR slugs to scrape (non-empty). Known slugs: `ai`, `crypto`, `data`, `design`, `dev`, `devops`, `fintech`, `founders`, `hardware`, `infosec`, `it`, `marketing`, `product`, `tech`. |
+| `dateRange`         | string[] | One date (YYYY-MM-DD) for a single day, or two dates for start and end (inclusive). Array length must be 1 or 2.                                                                      |
+| `criteria`          | string[] | Matching criteria that the article must satisfy. Each array element is a separate criterion string. The app numbers and formats them for prompts and output. Must be non-empty.       |
+| `models`            | object   | Model IDs by role. Required.                                                                                                                                                          |
+| `models.screening`  | string   | Optional. OpenRouter model ID for Stage 1 summary screening. If omitted, Stage 1 is skipped and every article is fetched and evaluated with the evaluation model.                     |
+| `models.evaluation` | string   | OpenRouter model ID for Stage 2 full article evaluation. Required.                                                                                                                    |
+| `outputFormat`      | string   | Optional. One of `md`, `json`, or `both`. Defaults to `json` if missing or invalid.                                                                                                   |
 
 ## Run
 
@@ -80,10 +76,14 @@ Input (`config.json`):
   "newsletters": ["ai", "dev"],
   "dateRange": ["2025-10-07", "2025-10-27"],
   "models": {
-    "evaluation": "arcee-ai/trinity-large-preview:free",
-    "screening": "arcee-ai/trinity-large-preview:free"
+    "screening": "google/gemini-2.5-flash-lite",
+    "evaluation": "deepseek/deepseek-v3.2"
   },
-    "criteria": "The article must strictly satisfy all of the following criteria:\n- Personal Experience: It is a first-hand account from a developer or team.\n- Rarely Writing Manual Code: The article states, implies, or supports a reasonable inference that AI coding agents are now so accurate that the human rarely performs manual implementation.\n- Clear Productivity Gains: The developer describes in quantitative terms materially faster delivery, higher throughput, or meaningful time savings due to AI assistance.",
+  "criteria": [
+    "It is a first-hand account from a developer or team.",
+    "The article states, implies, or supports a reasonable inference that AI coding agents are now so accurate that the human rarely performs manual implementation.",
+    "The developer describes in quantitative terms materially faster delivery, higher throughput, or meaningful time savings due to AI assistance."
+  ],
   "outputFormat": "json"
 }
 ```
