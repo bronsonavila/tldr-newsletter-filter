@@ -168,21 +168,16 @@ async function main(): Promise<void> {
 
   if (progressInterval) clearInterval(progressInterval)
 
-  if (spinner) spinner.succeed(`Evaluated ${counts.done} articles, ${matchCountText(counts.matches)}`)
+  if (spinner) spinner.stop()
 
   // Output is the full set of matched articles from the in-memory progress map (all evaluated this run, keyed by normalized URL).
   const matching = Object.values(progress).filter(record => record.status === EVALUATED_STATUS.matched)
   const durationMs = Date.now() - startTime
+  const uniqueArticleCount = Object.keys(progress).length
 
   await finalizeProgressLog(progress, durationMs)
 
-  const outputPaths = await writeOutput(
-    matching,
-    config,
-    durationMs,
-    counts.done,
-    counts.matches
-  )
+  const outputPaths = await writeOutput(matching, config, durationMs, uniqueArticleCount, matching.length)
 
   if (matching.length > 0) {
     console.log('\nMatches:')
@@ -192,7 +187,11 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log(`\n${matching.length} matching → ${outputPaths.join(', ')}`)
+  const matchLabel = matching.length === 1 ? 'match' : 'matches'
+
+  console.log(
+    `\nEvaluated ${uniqueArticleCount} articles, ${matching.length} ${matchLabel} → ${outputPaths.join(', ')}`
+  )
 }
 
 main().catch(error => {
