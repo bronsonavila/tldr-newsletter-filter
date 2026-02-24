@@ -4,7 +4,7 @@ import type { Config } from './config.js'
 import { loadConfig } from './config.js'
 import { SPINNER_INTERVAL_MS } from './constants.js'
 import { writeOutput } from './output/output.js'
-import { appendProgressLog, initProgressLog } from './output/progressLog.js'
+import { appendProgressLog, finalizeProgressLog, initProgressLog } from './output/progressLog.js'
 import { fetchArticleText } from './pipeline/articleFetcher.js'
 import { createBatchProcessor } from './pipeline/batchProcessor.js'
 import { evaluateArticle, evaluateSummary } from './pipeline/evaluator.js'
@@ -94,7 +94,7 @@ async function main(): Promise<void> {
   // Start fresh each run (no resume); progress is for within-run dedupe and per-result persistence to the log file.
   const progress: Record<string, EvaluatedArticle> = {}
 
-  await initProgressLog(progress)
+  await initProgressLog(progress, config)
 
   const startTime = Date.now()
   const counts = { done: 0, matches: 0 }
@@ -173,6 +173,9 @@ async function main(): Promise<void> {
   // Output is the full set of matched articles from the in-memory progress map (all evaluated this run, keyed by normalized URL).
   const matching = Object.values(progress).filter(record => record.status === EVALUATED_STATUS.matched)
   const durationMs = Date.now() - startTime
+
+  await finalizeProgressLog(progress, durationMs)
+
   const outputPaths = await writeOutput(
     matching,
     config,
