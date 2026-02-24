@@ -34,8 +34,7 @@ export const ConfigSchema = z
         .transform(s => s.trim()),
       screening: z
         .string()
-        .min(1)
-        .transform(s => s.trim())
+        .transform(s => s.trim() || undefined)
         .optional()
     }),
     outputFormat: outputFormatEnum.optional().default('json')
