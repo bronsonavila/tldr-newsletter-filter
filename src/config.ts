@@ -6,7 +6,9 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
 function isValidDate(dateString: string): boolean {
   if (!DATE_REGEX.test(dateString)) return false
+
   const parsedDate = new Date(dateString)
+
   return !Number.isNaN(parsedDate.getTime())
 }
 
@@ -17,8 +19,10 @@ const outputFormatEnum = z.enum(['md', 'json', 'both'])
 export const ConfigSchema = z
   .object({
     newsletters: z.array(z.string()).min(1, "Config must have a non-empty array 'newsletters'"),
-    dateStart: dateString,
-    dateEnd: dateString,
+    dateRange: z
+      .array(dateString)
+      .min(1, 'dateRange must have 1 or 2 dates')
+      .max(2, 'dateRange must have 1 or 2 dates'),
     criteria: z
       .string()
       .min(1, "Config must have a non-empty string 'criteria'")
@@ -36,10 +40,15 @@ export const ConfigSchema = z
     }),
     outputFormat: outputFormatEnum.optional().default('json')
   })
-  .refine(data => new Date(data.dateStart) <= new Date(data.dateEnd), {
-    message: 'dateStart must be before or equal to dateEnd',
-    path: ['dateEnd']
+  .refine(data => data.dateRange.length === 1 || new Date(data.dateRange[0]) <= new Date(data.dateRange[1]), {
+    message: 'When dateRange has 2 elements, the first must be before or equal to the second',
+    path: ['dateRange']
   })
+  .transform(data => ({
+    ...data,
+    dateStart: data.dateRange[0],
+    dateEnd: data.dateRange[data.dateRange.length - 1]
+  }))
 
 export type Config = z.infer<typeof ConfigSchema>
 export type OutputFormat = Config['outputFormat']
@@ -48,14 +57,17 @@ export async function loadConfig(): Promise<Config> {
   const path = join(process.cwd(), 'config.json')
 
   let raw: string
+
   try {
     raw = await readFile(path, 'utf8')
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+
     throw new Error(`Config file not found or unreadable (${path}): ${message}`)
   }
 
   let data: unknown
+
   try {
     data = JSON.parse(raw)
   } catch {

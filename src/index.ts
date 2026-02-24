@@ -173,7 +173,13 @@ async function main(): Promise<void> {
   // Output is the full set of matched articles from the in-memory progress map (all evaluated this run, keyed by normalized URL).
   const matching = Object.values(progress).filter(record => record.status === EVALUATED_STATUS.matched)
   const durationMs = Date.now() - startTime
-  const outputPaths = await writeOutput(matching, config, durationMs)
+  const outputPaths = await writeOutput(
+    matching,
+    config,
+    durationMs,
+    counts.done,
+    counts.matches
+  )
 
   if (matching.length > 0) {
     console.log('\nMatches:')

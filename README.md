@@ -38,8 +38,7 @@ Config schema (`config.json`):
 | Field               | Type     | Description                                                                                                                                                       |
 | ------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `newsletters`       | string[] | TLDR slugs to scrape (non-empty).                                                                                                                                 |
-| `dateStart`         | string   | Start date YYYY-MM-DD.                                                                                                                                            |
-| `dateEnd`           | string   | End date YYYY-MM-DD.                                                                                                                                              |
+| `dateRange`         | string[] | One date (YYYY-MM-DD) for a single day, or two dates for start and end (inclusive). Array length must be 1 or 2.                                                  |
 | `criteria`          | string   | Matching criteria that the article must satisfy. Single markdown-formatted string. The app wraps this in a system instruction prompt. Must be non-empty.          |
 | `models`            | object   | Model IDs by role. Required.                                                                                                                                      |
 | `models.evaluation` | string   | OpenRouter model ID for Stage 2 full article evaluation. Required.                                                                                                |
@@ -62,8 +61,8 @@ pnpm start
 Output (in `output/`):
 
 - `log.json` — One entry per evaluated URL (matched, not matched, summary rejected (Stage 1), fetch failed, or evaluation failed). Updated incrementally. Each run overwrites it (no resume).
-- `matching_articles.json` — Written when `outputFormat` is `json` or `both`. Object: `metadata` (newsletters, dateStart, dateEnd, criteria, generatedAt) and `articles` (array of { title, url, date, source, reason?, summary? }).
-- `matching_articles.md` — Written when `outputFormat` is `md` or `both`. A header with run config and generation time, then a bullet list of matches with an optional reason line per article.
+- `matching_articles.json` — Written when `outputFormat` is `json` or `both`. Object: `metadata` and `articles`.
+- `matching_articles.md` — Written when `outputFormat` is `md` or `both`. A header with run config and generation time, then a bullet list of matches with a reason line per article.
 
 ## Project structure
 
@@ -79,8 +78,7 @@ Input (`config.json`):
 ```json
 {
   "newsletters": ["ai", "dev"],
-  "dateStart": "2025-10-07",
-  "dateEnd": "2025-10-27",
+  "dateRange": ["2025-10-07", "2025-10-27"],
   "models": {
     "evaluation": "arcee-ai/trinity-large-preview:free",
     "screening": "arcee-ai/trinity-large-preview:free"
