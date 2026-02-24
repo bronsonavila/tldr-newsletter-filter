@@ -21,9 +21,8 @@ async function recordResult(
 ): Promise<void> {
   await appendProgressLog(progress, result)
 
-  counts.done += 1
-
-  if (result.status === EVALUATED_STATUS.matched) counts.matches += 1
+  counts.done = Object.keys(progress).length
+  counts.matches = Object.values(progress).filter(record => record.status === EVALUATED_STATUS.matched).length
 }
 
 function matchCountText(count: number): string {
