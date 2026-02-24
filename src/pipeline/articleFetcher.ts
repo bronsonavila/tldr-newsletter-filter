@@ -3,6 +3,8 @@ import { Worker } from 'node:worker_threads'
 import { FETCH_TIMEOUT_MS, MAX_ARTICLE_LENGTH, USER_AGENT } from '../constants.js'
 import { fetchWithRetry } from '../utils/retry.js'
 
+// Constants
+
 const BROWSER_HEADERS: Record<string, string> = {
   'User-Agent': USER_AGENT,
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -12,7 +14,11 @@ const BROWSER_HEADERS: Record<string, string> = {
 
 const WORKER_PATH = fileURLToPath(new URL('./parseWorker.ts', import.meta.url))
 
+// Types
+
 export type FetchResult = { ok: true; text: string } | { ok: false; reason: string }
+
+// Helpers
 
 function failureReason(error: unknown): string {
   if (error instanceof Error) {
@@ -36,6 +42,8 @@ function parseInWorker(html: string, url: string): Promise<FetchResult> {
     worker.once('error', error => resolve({ ok: false, reason: failureReason(error) }))
   })
 }
+
+// Main Function
 
 export async function fetchArticleText(url: string): Promise<FetchResult> {
   try {

@@ -2,7 +2,11 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 
+// Constants
+
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
+
+// Helpers
 
 function isValidDate(dateString: string): boolean {
   if (!DATE_REGEX.test(dateString)) return false
@@ -11,6 +15,8 @@ function isValidDate(dateString: string): boolean {
 
   return !Number.isNaN(parsedDate.getTime())
 }
+
+// Schema
 
 const dateString = z.string().regex(DATE_REGEX, 'Must be YYYY-MM-DD').refine(isValidDate, 'Must be a valid date')
 
@@ -49,8 +55,13 @@ export const ConfigSchema = z
     dateEnd: data.dateRange[data.dateRange.length - 1]
   }))
 
+// Types
+
 export type Config = z.infer<typeof ConfigSchema>
+
 export type OutputFormat = Config['outputFormat']
+
+// Main Function
 
 export async function loadConfig(): Promise<Config> {
   const path = join(process.cwd(), 'config.json')

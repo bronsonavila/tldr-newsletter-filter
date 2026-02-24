@@ -1,13 +1,11 @@
 import 'dotenv/config'
 import ora from 'ora'
-import type { Config } from './config.js'
 import { loadConfig } from './config.js'
 import { SPINNER_INTERVAL_MS } from './constants.js'
 import { writeOutput } from './output/output.js'
 import { appendProgressLog, finalizeProgressLog, initProgressLog } from './output/progressLog.js'
-import { fetchArticleText } from './pipeline/articleFetcher.js'
 import { createBatchProcessor } from './pipeline/batchProcessor.js'
-import { evaluateArticle, evaluateSummary } from './pipeline/evaluator.js'
+import { evaluateLink } from './pipeline/linkPipeline.js'
 import { scrapeArchivesBatched } from './pipeline/scraper.js'
 import type { ArticleLink, EvaluatedArticle } from './types.js'
 import { EVALUATED_STATUS } from './types.js'
@@ -29,57 +27,6 @@ async function recordResult(
 
 function matchCountText(count: number): string {
   return count === 1 ? '1 match' : `${count} matches`
-}
-
-// Link Processor
-
-async function evaluateLink(link: ArticleLink, config: Config): Promise<EvaluatedArticle> {
-  let tokens = 0
-
-  // Stage 1: Optional token-saving screen on title and summary only. Skipped when models.screening is not set.
-  if (link.summary && config.models.screening) {
-    const summaryResult = await evaluateSummary(link.title, link.summary, {
-      model: config.models.screening,
-      criteria: config.criteria
-    })
-
-    tokens += summaryResult.tokens ?? 0
-
-    if (summaryResult.status === 'rejected') {
-      return {
-        ...link,
-        status: EVALUATED_STATUS.summary_rejected,
-        reason: summaryResult.reason,
-        ...(tokens > 0 && { tokens })
-      }
-    }
-  }
-
-  // Stage 2: Full article fetch and evaluation.
-  const fetchResult = await fetchArticleText(link.url)
-
-  if (!fetchResult.ok) {
-    return {
-      ...link,
-      status: EVALUATED_STATUS.fetch_failed,
-      reason: fetchResult.reason,
-      ...(tokens > 0 && { tokens })
-    }
-  }
-
-  const evaluateResult = await evaluateArticle(fetchResult.text, {
-    model: config.models.evaluation,
-    criteria: config.criteria
-  })
-
-  tokens += evaluateResult.tokens ?? 0
-
-  return {
-    ...link,
-    status: evaluateResult.status,
-    reason: evaluateResult.reason,
-    ...(tokens > 0 && { tokens })
-  }
 }
 
 // Main

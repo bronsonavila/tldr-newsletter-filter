@@ -2,6 +2,8 @@ import pLimit from 'p-limit'
 import { CONCURRENT_LIMIT } from '../constants.js'
 import type { EvaluatedArticle } from '../types.js'
 
+// Types
+
 interface PendingLink {
   promise: Promise<EvaluatedArticle>
   result?: EvaluatedArticle
@@ -12,6 +14,8 @@ interface PendingLink {
 interface PendingBatch {
   links: PendingLink[]
 }
+
+// Main Function
 
 export function createBatchProcessor() {
   const limit = pLimit(CONCURRENT_LIMIT)

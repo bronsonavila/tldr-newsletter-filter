@@ -38,7 +38,7 @@ export interface MatchingArticlesOutput {
   }>
 }
 
-// Shared Helpers
+// Helpers
 
 function dedupeByUrl<T extends { url: string }>(articles: T[]): T[] {
   const seen = new Set<string>()
@@ -68,8 +68,6 @@ function formatDurationMs(durationMs: number): string {
 
   return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`
 }
-
-// Markdown Output
 
 function formatCriteriaForMarkdown(criteria: string): string {
   const lines = criteria.split('\n')
@@ -133,8 +131,6 @@ function buildMatchingMarkdown(
   return `${header}${list}\n`
 }
 
-// JSON Output
-
 function buildMatchingJson(
   articles: EvaluatedArticle[],
   config: Config,
@@ -168,7 +164,7 @@ function buildMatchingJson(
   }
 }
 
-// Public API
+// Main Function
 
 export async function writeOutput(
   matching: EvaluatedArticle[],

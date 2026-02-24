@@ -1,26 +1,8 @@
-import OpenAI from 'openai'
-import { MAX_BACKOFF_MS, MAX_PROMPT_LENGTH, MAX_RETRIES } from '../constants.js'
+import { MAX_PROMPT_LENGTH } from '../constants.js'
 import { EVALUATED_STATUS } from '../types.js'
-import { delay, RETRYABLE_STATUS_CODES } from '../utils/retry.js'
+import { evaluateWithInstructions } from './llmClient.js'
 
-// Public Types and Options
-
-export type EvaluateResult =
-  | { status: 'matched'; reason: string; tokens?: number }
-  | { status: 'not_matched'; reason: string; tokens?: number }
-  | { status: 'evaluation_failed'; reason: string; tokens?: number }
-
-export type SummaryEvaluateResult =
-  | { status: 'passed'; reason: string; tokens?: number }
-  | { status: 'rejected'; reason: string; tokens?: number }
-  | { status: 'evaluation_failed'; reason: string; tokens?: number }
-
-export interface EvaluateOptions {
-  model: string
-  criteria: string
-}
-
-// System Instructions
+// Constants
 
 // Stage 1 screening: Ballpark relevance only. Avoids full article evaluation for clearly unrelated items.
 const SUMMARY_SYSTEM_INSTRUCTION = `<role>
@@ -62,29 +44,26 @@ Return your response as JSON with these exact fields:
 }
 </output_format>`
 
-// API Client
+// Types
 
-function getApiKey(): string {
-  const key = process.env.OPENROUTER_API_KEY
+export type EvaluateResult =
+  | { status: 'matched'; reason: string; tokens?: number }
+  | { status: 'not_matched'; reason: string; tokens?: number }
+  | { status: 'evaluation_failed'; reason: string; tokens?: number }
 
-  if (!key) throw new Error('Set OPENROUTER_API_KEY')
+export type SummaryEvaluateResult =
+  | { status: 'passed'; reason: string; tokens?: number }
+  | { status: 'rejected'; reason: string; tokens?: number }
+  | { status: 'evaluation_failed'; reason: string; tokens?: number }
 
-  return key
+export interface EvaluateOptions {
+  model: string
+  criteria: string
 }
-
-let client: OpenAI | null = null
-
-function getClient(): OpenAI {
-  if (!client) {
-    client = new OpenAI({ apiKey: getApiKey(), baseURL: 'https://openrouter.ai/api/v1' })
-  }
-
-  return client
-}
-
-// Response Parsing
 
 type BooleanParseResult<T> = { status: T; reason: string } | { status: 'evaluation_failed'; reason: string }
+
+// Helpers
 
 function parseBooleanJsonResponse<T extends string>(
   text: string | undefined,
@@ -143,8 +122,6 @@ function parseSummaryResponse(text: string | undefined): SummaryEvaluateResult {
   }) as SummaryEvaluateResult
 }
 
-// User Content Builders
-
 function buildSummaryUserContent(title: string, summary: string, criteria: string): string {
   return `<context>
 Title: ${title}
@@ -178,56 +155,7 @@ ${criteria}
 </task>`
 }
 
-// Evaluation Orchestration
-
-function isRetryableApiError(error: unknown): boolean {
-  const status = error && typeof error === 'object' && 'status' in error ? (error as { status: number }).status : null
-
-  return typeof status === 'number' && RETRYABLE_STATUS_CODES.has(status)
-}
-
-async function evaluateWithInstructions<T extends { status: string; reason: string }>(options: {
-  model: string
-  systemInstruction: string
-  userContent: string
-  parse: (content: string | undefined) => T
-}): Promise<T & { tokens?: number }> {
-  const client = getClient()
-
-  let lastError: unknown
-
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const response = await client.chat.completions.create({
-        model: options.model,
-        messages: [
-          { role: 'system', content: options.systemInstruction },
-          { role: 'user', content: options.userContent }
-        ],
-        response_format: { type: 'json_object' }
-      })
-
-      const result = options.parse(response.choices?.[0]?.message?.content ?? undefined)
-      const tokens = response.usage?.total_tokens
-
-      return { ...result, ...(tokens !== undefined && { tokens }) }
-    } catch (error) {
-      lastError = error
-
-      if (attempt < MAX_RETRIES && isRetryableApiError(error)) {
-        await delay(Math.min(1000 * 2 ** attempt, MAX_BACKOFF_MS))
-
-        continue
-      }
-
-      throw error
-    }
-  }
-
-  throw lastError
-}
-
-// Public Entry Points
+// Main Functions
 
 export async function evaluateSummary(
   title: string,

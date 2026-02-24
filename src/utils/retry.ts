@@ -1,8 +1,26 @@
 import { MAX_BACKOFF_MS, MAX_RETRIES } from '../constants.js'
 
+// Constants
+
 export const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503])
 
-export function delay(ms: number): Promise<void> {
+// Types
+
+export interface WithRetryOptions<T> {
+  shouldRetry?: (result: T) => boolean
+  isRetryableError?: (error: unknown) => boolean
+  retries?: number
+}
+
+export interface FetchWithRetryOptions {
+  retries?: number
+  signal?: AbortSignal
+  headers?: Record<string, string>
+}
+
+// Helpers
+
+function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
@@ -18,25 +36,21 @@ function isRetryableError(error: unknown): boolean {
   return false
 }
 
-export interface FetchWithRetryOptions {
-  retries?: number
-  signal?: AbortSignal
-  headers?: Record<string, string>
-}
+// Main Functions
 
-// Fetch with exponential backoff. Retries on 429, 5xx, and network errors.
-export async function fetchWithRetry(url: string, options: FetchWithRetryOptions = {}): Promise<Response> {
-  const { retries = MAX_RETRIES, signal, headers } = options
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: WithRetryOptions<T> = {}
+): Promise<T> {
+  const { shouldRetry, isRetryableError, retries = MAX_RETRIES } = options
 
   let lastError: unknown
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await fetch(url, { headers, signal })
+      const result = await fn()
 
-      if (response.ok) return response
-
-      if (attempt < retries && isRetryableResponse(response)) {
+      if (shouldRetry?.(result) && attempt < retries) {
         const backoffMs = Math.min(1000 * 2 ** attempt, MAX_BACKOFF_MS)
 
         await delay(backoffMs)
@@ -44,11 +58,11 @@ export async function fetchWithRetry(url: string, options: FetchWithRetryOptions
         continue
       }
 
-      return response
+      return result
     } catch (error) {
       lastError = error
 
-      if (attempt < retries && isRetryableError(error)) {
+      if (attempt < retries && isRetryableError?.(error)) {
         const backoffMs = Math.min(1000 * 2 ** attempt, MAX_BACKOFF_MS)
 
         await delay(backoffMs)
@@ -60,5 +74,15 @@ export async function fetchWithRetry(url: string, options: FetchWithRetryOptions
     }
   }
 
-  throw lastError
+  throw lastError ?? new Error('Retries exhausted')
+}
+
+export async function fetchWithRetry(url: string, options: FetchWithRetryOptions = {}): Promise<Response> {
+  const { retries, signal, headers } = options
+
+  return withRetry(() => fetch(url, { headers, signal }), {
+    shouldRetry: response => !response.ok && isRetryableResponse(response),
+    isRetryableError,
+    retries
+  })
 }

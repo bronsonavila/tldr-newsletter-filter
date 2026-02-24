@@ -1,10 +1,4 @@
-export interface ArticleLink {
-  title: string
-  url: string
-  date: string
-  source: string
-  summary?: string
-}
+// Constants
 
 export const EVALUATED_STATUS = {
   matched: 'matched',
@@ -13,6 +7,16 @@ export const EVALUATED_STATUS = {
   fetch_failed: 'fetch_failed',
   evaluation_failed: 'evaluation_failed'
 } as const
+
+// Types
+
+export interface ArticleLink {
+  title: string
+  url: string
+  date: string
+  source: string
+  summary?: string
+}
 
 export type EvaluatedStatus = (typeof EVALUATED_STATUS)[keyof typeof EVALUATED_STATUS]
 

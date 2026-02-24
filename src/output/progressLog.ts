@@ -6,6 +6,8 @@ import type { EvaluatedArticle, EvaluatedStatus } from '../types.js'
 import { EVALUATED_STATUS } from '../types.js'
 import { normalizedUrl } from '../utils/url.js'
 
+// Constants and State
+
 const OUTPUT_DIR_ABSOLUTE = join(process.cwd(), OUTPUT_DIR)
 
 const LOG_PATH = join(OUTPUT_DIR_ABSOLUTE, 'log.json')
@@ -15,6 +17,9 @@ let runConfig: Config | null = null
 let startedAt: string | null = null
 let completedAt: string | null = null
 let durationMs: number | null = null
+let writeChain: Promise<void> = Promise.resolve()
+
+// Types
 
 export interface ProgressLogMetadata {
   newsletters: string[]
@@ -34,6 +39,8 @@ export interface ProgressLogOutput {
   metadata: ProgressLogMetadata
   articles: Record<string, EvaluatedArticle>
 }
+
+// Helpers
 
 function defaultStatusCounts(): Record<EvaluatedStatus, number> {
   const counts = {} as Record<EvaluatedStatus, number>
@@ -105,7 +112,7 @@ async function writeProgressLog(progress: Record<string, EvaluatedArticle>): Pro
   await writeFile(LOG_PATH, JSON.stringify(payload, null, 2), 'utf8')
 }
 
-let writeChain: Promise<void> = Promise.resolve()
+// Main Functions
 
 // Do not load from a previous run. Overwrite the log with the initial state (empty object) so each run starts fresh. The log is for post-run inspection and debugging only.
 export async function initProgressLog(progress: Record<string, EvaluatedArticle>, config: Config): Promise<void> {

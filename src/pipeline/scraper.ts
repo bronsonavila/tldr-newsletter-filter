@@ -3,7 +3,13 @@ import { SCRAPE_TIMEOUT_MS, USER_AGENT } from '../constants.js'
 import type { ArticleLink } from '../types.js'
 import { fetchWithRetry } from '../utils/retry.js'
 
-// Public Types and Options
+// Constants
+
+const SPONSOR_MARKER = '(Sponsor)'
+
+const TLDR_BASE = 'https://tldr.tech'
+
+// Types
 
 export interface ScrapeOptions {
   newsletters: string[]
@@ -18,13 +24,7 @@ export interface ArchiveBatch {
   links: ArticleLink[]
 }
 
-// Constants
-
-const SPONSOR_MARKER = '(Sponsor)'
-
-const TLDR_BASE = 'https://tldr.tech'
-
-// Date Helpers
+// Helpers
 
 function dateRange(start: string, end: string): string[] {
   const startDate = new Date(start)
@@ -61,8 +61,6 @@ function dateSourcePairs(
 
   return pairs
 }
-
-// Fetch and Parse
 
 async function fetchArchivePage(url: string): Promise<string | null> {
   try {
@@ -106,7 +104,7 @@ function extractLinksFromHtml(html: string, date: string, source: string): Artic
   return links
 }
 
-// Public Entry Point
+// Main Function
 
 export async function* scrapeArchivesBatched(options: ScrapeOptions): AsyncGenerator<ArchiveBatch> {
   const { newsletters, dateStart, dateEnd } = options
