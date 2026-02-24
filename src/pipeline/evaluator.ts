@@ -207,7 +207,7 @@ async function evaluateWithInstructions<T extends { status: string; reason: stri
         response_format: { type: 'json_object' }
       })
 
-      const result = options.parse(response.choices[0]?.message?.content ?? undefined)
+      const result = options.parse(response.choices?.[0]?.message?.content ?? undefined)
       const tokens = response.usage?.total_tokens
 
       return { ...result, ...(tokens !== undefined && { tokens }) }
