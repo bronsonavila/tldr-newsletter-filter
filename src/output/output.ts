@@ -1,9 +1,9 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Config } from '../config.js'
-import { OUTPUT_DIR } from '../constants.js'
 import type { EvaluatedArticle } from '../types.js'
 import { normalizedUrl } from '../utils/url.js'
+import { getRunDir } from './runDir.js'
 
 // Constants
 
@@ -175,14 +175,12 @@ export async function writeOutput(
 ): Promise<string[]> {
   const matchingDeduped = dedupeByUrl(matching)
   const format = config.outputFormat ?? 'json'
-  const outDir = join(process.cwd(), OUTPUT_DIR)
-
-  await mkdir(outDir, { recursive: true })
+  const runDir = getRunDir()
 
   const paths: string[] = []
 
   if (format === 'md' || format === 'both') {
-    const mdPath = join(outDir, MATCHING_MD_FILENAME)
+    const mdPath = join(runDir, MATCHING_MD_FILENAME)
 
     await writeFile(
       mdPath,
@@ -194,7 +192,7 @@ export async function writeOutput(
   }
 
   if (format === 'json' || format === 'both') {
-    const jsonPath = join(outDir, MATCHING_JSON_FILENAME)
+    const jsonPath = join(runDir, MATCHING_JSON_FILENAME)
     const payload = buildMatchingJson(
       matchingDeduped,
       config,
@@ -208,5 +206,5 @@ export async function writeOutput(
     paths.push(jsonPath)
   }
 
-  return paths.length > 0 ? paths : [join(outDir, MATCHING_JSON_FILENAME)]
+  return paths.length > 0 ? paths : [join(runDir, MATCHING_JSON_FILENAME)]
 }

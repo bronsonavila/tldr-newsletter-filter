@@ -6,8 +6,8 @@ Finds [TLDR newsletter](https://tldr.tech/) articles that match user-defined cri
 
 1. Scrapes TLDR archive pages for the newsletters and date range in your config (only non-sponsor links).
 2. For each scraped archive batch, fetches and evaluates all links in that batch concurrently.
-3. Writes `output/log.json` incrementally as each article is evaluated.
-4. At the end of the run, writes `matching_articles.json`, `matching_articles.md`, or both, per `outputFormat`.
+3. Each run creates a timestamped directory under `output/` (e.g. `output/2026-02-24_15-30-12/`) and writes `log.json` incrementally as each article is evaluated.
+4. At the end of the run, writes `matching_articles.json`, `matching_articles.md`, or both (per `outputFormat`) into the same run directory.
 
 ## Evaluation pipeline
 
@@ -58,9 +58,9 @@ pnpm install
 pnpm start
 ```
 
-Output (in `output/`):
+Each run writes to a timestamped directory under `output/` (e.g. `output/2026-02-24_15-30-12/`):
 
-- `log.json` — One entry per evaluated URL (matched, not matched, summary rejected (Stage 1), fetch failed, or evaluation failed). Updated incrementally. Each run overwrites it (no resume).
+- `log.json` — One entry per evaluated URL (matched, not matched, summary rejected (Stage 1), fetch failed, or evaluation failed). Updated incrementally. Previous runs are preserved in their own directories.
 - `matching_articles.json` — Written when `outputFormat` is `json` or `both`. Object: `metadata` and `articles`.
 - `matching_articles.md` — Written when `outputFormat` is `md` or `both`. A header with run config and generation time, then a bullet list of matches with a reason line per article.
 
@@ -88,7 +88,7 @@ Input (`config.json`):
 }
 ```
 
-Output (`matching_articles.json`):
+Output (`output/2026-02-24_15-30-12/matching_articles.json`):
 
 ```json
 {

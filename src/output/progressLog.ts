@@ -1,16 +1,12 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Config } from '../config.js'
-import { OUTPUT_DIR } from '../constants.js'
 import type { EvaluatedArticle, EvaluatedStatus } from '../types.js'
 import { EVALUATED_STATUS } from '../types.js'
 import { normalizedUrl } from '../utils/url.js'
+import { getRunDir } from './runDir.js'
 
-// Constants and State
-
-const OUTPUT_DIR_ABSOLUTE = join(process.cwd(), OUTPUT_DIR)
-
-const LOG_PATH = join(OUTPUT_DIR_ABSOLUTE, 'log.json')
+// State
 
 // Module-level state for run context (set at init, finalized at end).
 let runConfig: Config | null = null
@@ -85,12 +81,8 @@ function computeMetadata(progress: Record<string, EvaluatedArticle>): ProgressLo
   }
 }
 
-async function ensureOutputDir(): Promise<void> {
-  await mkdir(OUTPUT_DIR_ABSOLUTE, { recursive: true })
-}
-
 async function writeProgressLog(progress: Record<string, EvaluatedArticle>): Promise<void> {
-  await ensureOutputDir()
+  const logPath = join(getRunDir(), 'log.json')
 
   const metadata = computeMetadata(progress)
 
@@ -109,7 +101,7 @@ async function writeProgressLog(progress: Record<string, EvaluatedArticle>): Pro
     articles: progress
   }
 
-  await writeFile(LOG_PATH, JSON.stringify(payload, null, 2), 'utf8')
+  await writeFile(logPath, JSON.stringify(payload, null, 2), 'utf8')
 }
 
 // Main Functions

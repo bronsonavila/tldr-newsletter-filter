@@ -4,6 +4,7 @@ import { loadConfig } from './config.js'
 import { SPINNER_INTERVAL_MS } from './constants.js'
 import { writeOutput } from './output/output.js'
 import { appendProgressLog, finalizeProgressLog, initProgressLog } from './output/progressLog.js'
+import { initRunDir } from './output/runDir.js'
 import { createBatchProcessor } from './pipeline/batchProcessor.js'
 import { evaluateLink } from './pipeline/linkPipeline.js'
 import { scrapeArchivesBatched } from './pipeline/scraper.js'
@@ -37,6 +38,9 @@ async function main(): Promise<void> {
   if (!process.env.OPENROUTER_API_KEY?.trim()) {
     throw new Error('OPENROUTER_API_KEY must be set')
   }
+
+  // Each run writes to its own timestamped directory under output/.
+  await initRunDir()
 
   // Start fresh each run (no resume); progress is for within-run dedupe and per-result persistence to the log file.
   const progress: Record<string, EvaluatedArticle> = {}
