@@ -8,7 +8,7 @@ export const MAX_BACKOFF_MS = 5_000
 
 export const MAX_PROMPT_LENGTH = 100_000
 
-export const MAX_RETRIES = 1
+export const MAX_RETRIES = 3
 
 export const OUTPUT_DIR = 'output'
 

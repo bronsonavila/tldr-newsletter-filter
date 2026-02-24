@@ -1,4 +1,4 @@
-import OpenAI from 'openai'
+import OpenAI, { APIConnectionError, APIConnectionTimeoutError } from 'openai'
 import { RETRYABLE_STATUS_CODES, withRetry } from '../utils/retry.js'
 
 let client: OpenAI | null = null
@@ -22,9 +22,25 @@ function getClient(): OpenAI {
 }
 
 function isRetryableApiError(error: unknown): boolean {
-  const status = error && typeof error === 'object' && 'status' in error ? (error as { status: number }).status : null
+  if (error instanceof APIConnectionTimeoutError) return true
 
-  return typeof status === 'number' && RETRYABLE_STATUS_CODES.has(status)
+  if (error instanceof APIConnectionError) return true
+
+  if (error && typeof error === 'object') {
+    if ('code' in error) {
+      const code = (error as { code?: string }).code
+
+      if (code === 'ETIMEDOUT' || code === 'ECONNRESET') return true
+    }
+
+    if ('status' in error) {
+      const status = (error as { status?: number }).status
+
+      if (typeof status === 'number' && RETRYABLE_STATUS_CODES.has(status)) return true
+    }
+  }
+
+  return false
 }
 
 // Main Function
