@@ -1,18 +1,18 @@
 export const CONCURRENT_LIMIT = 10
 
-export const FETCH_TIMEOUT_MS = 20_000
+export const FETCH_TIMEOUT_MS = 8_000
 
 export const MAX_ARTICLE_LENGTH = 120_000
 
-export const MAX_BACKOFF_MS = 30_000
+export const MAX_BACKOFF_MS = 5_000
 
 export const MAX_PROMPT_LENGTH = 100_000
 
-export const MAX_RETRIES = 3
+export const MAX_RETRIES = 1
 
 export const OUTPUT_DIR = 'output'
 
-export const SCRAPE_TIMEOUT_MS = 15_000
+export const SCRAPE_TIMEOUT_MS = 8_000
 
 export const SPINNER_INTERVAL_MS = 400
 
