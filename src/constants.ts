@@ -1,3 +1,5 @@
+export const CONCURRENT_LIMIT = 10
+
 export const FETCH_TIMEOUT_MS = 20_000
 
 export const MAX_ARTICLE_LENGTH = 120_000

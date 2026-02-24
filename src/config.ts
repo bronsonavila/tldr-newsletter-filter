@@ -23,15 +23,17 @@ export const ConfigSchema = z
       .string()
       .min(1, "Config must have a non-empty string 'criteria'")
       .transform(s => s.trim()),
-    evaluationModel: z
-      .string()
-      .min(1, "Config must have a non-empty string 'evaluationModel'")
-      .transform(s => s.trim()),
-    screeningModel: z
-      .string()
-      .min(1)
-      .transform(s => s.trim())
-      .optional(),
+    models: z.object({
+      evaluation: z
+        .string()
+        .min(1, "Config must have a non-empty string 'models.evaluation'")
+        .transform(s => s.trim()),
+      screening: z
+        .string()
+        .min(1)
+        .transform(s => s.trim())
+        .optional()
+    }),
     outputFormat: outputFormatEnum.optional().default('json')
   })
   .refine(data => new Date(data.dateStart) <= new Date(data.dateEnd), {

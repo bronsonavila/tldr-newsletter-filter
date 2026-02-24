@@ -1,12 +1,12 @@
 import 'dotenv/config'
 import ora from 'ora'
-import pLimit from 'p-limit'
 import type { Config } from './config.js'
 import { loadConfig } from './config.js'
 import { SPINNER_INTERVAL_MS } from './constants.js'
 import { writeOutput } from './output/output.js'
 import { appendProgressLog, initProgressLog } from './output/progressLog.js'
 import { fetchArticleText } from './pipeline/articleFetcher.js'
+import { createBatchProcessor } from './pipeline/batchProcessor.js'
 import { evaluateArticle, evaluateSummary } from './pipeline/evaluator.js'
 import { scrapeArchivesBatched } from './pipeline/scraper.js'
 import type { ArticleLink, EvaluatedArticle } from './types.js'
@@ -33,32 +33,25 @@ function matchCountText(count: number): string {
 
 // Link Processor
 
-async function processLink(
-  link: ArticleLink,
-  config: Config,
-  progress: Record<string, EvaluatedArticle>,
-  counts: { done: number; matches: number }
-): Promise<void> {
+async function evaluateLink(link: ArticleLink, config: Config): Promise<EvaluatedArticle> {
   let tokens = 0
 
-  // Stage 1: Optional token-saving screen on title and summary only. Skipped when screeningModel is not set.
-  if (link.summary && config.screeningModel) {
+  // Stage 1: Optional token-saving screen on title and summary only. Skipped when models.screening is not set.
+  if (link.summary && config.models.screening) {
     const summaryResult = await evaluateSummary(link.title, link.summary, {
-      model: config.screeningModel,
+      model: config.models.screening,
       criteria: config.criteria
     })
 
     tokens += summaryResult.tokens ?? 0
 
     if (summaryResult.status === 'rejected') {
-      await recordResult(progress, counts, {
+      return {
         ...link,
         status: EVALUATED_STATUS.summary_rejected,
         reason: summaryResult.reason,
         ...(tokens > 0 && { tokens })
-      })
-
-      return
+      }
     }
   }
 
@@ -66,29 +59,27 @@ async function processLink(
   const fetchResult = await fetchArticleText(link.url)
 
   if (!fetchResult.ok) {
-    await recordResult(progress, counts, {
+    return {
       ...link,
       status: EVALUATED_STATUS.fetch_failed,
       reason: fetchResult.reason,
       ...(tokens > 0 && { tokens })
-    })
-
-    return
+    }
   }
 
   const evaluateResult = await evaluateArticle(fetchResult.text, {
-    model: config.evaluationModel,
+    model: config.models.evaluation,
     criteria: config.criteria
   })
 
   tokens += evaluateResult.tokens ?? 0
 
-  await recordResult(progress, counts, {
+  return {
     ...link,
     status: evaluateResult.status,
     reason: evaluateResult.reason,
     ...(tokens > 0 && { tokens })
-  })
+  }
 }
 
 // Main
@@ -105,6 +96,7 @@ async function main(): Promise<void> {
 
   await initProgressLog(progress)
 
+  const startTime = Date.now()
   const counts = { done: 0, matches: 0 }
 
   console.log(`Scraping TLDR ${config.newsletters.join(', ')} archives (${config.dateStart} to ${config.dateEnd})...`)
@@ -123,6 +115,8 @@ async function main(): Promise<void> {
 
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
+
+  const { limit, queueBatch, flushCompleted, flushAll, waitForCapacity, trackPromise } = createBatchProcessor()
 
   for await (const batch of scrapeArchivesBatched({
     newsletters: config.newsletters,
@@ -156,12 +150,21 @@ async function main(): Promise<void> {
       }, SPINNER_INTERVAL_MS)
     }
 
-    // Process one batch of links at a time. Allow full parallelism so the batch completes before the next scrape batch.
-    const limit = pLimit(Math.max(1, linksToProcess.length))
-    const pending = linksToProcess.map(link => limit(() => processLink(link, config, progress, counts)))
+    const linkPromises = linksToProcess.map(link => {
+      const promise = limit(() => evaluateLink(link, config))
 
-    await Promise.all(pending)
+      return trackPromise(promise)
+    })
+
+    queueBatch(linkPromises)
+
+    await flushCompleted(result => recordResult(progress, counts, result))
+
+    // Don't pull the next newsletter until the pool has room. Flush after each completion so the log updates.
+    await waitForCapacity(async () => await flushCompleted(result => recordResult(progress, counts, result)))
   }
+
+  await flushAll(result => recordResult(progress, counts, result))
 
   if (progressInterval) clearInterval(progressInterval)
 
@@ -169,7 +172,8 @@ async function main(): Promise<void> {
 
   // Output is the full set of matched articles from the in-memory progress map (all evaluated this run, keyed by normalized URL).
   const matching = Object.values(progress).filter(record => record.status === EVALUATED_STATUS.matched)
-  const outputPaths = await writeOutput(matching, config)
+  const durationMs = Date.now() - startTime
+  const outputPaths = await writeOutput(matching, config, durationMs)
 
   if (matching.length > 0) {
     console.log('\nMatches:')

@@ -11,7 +11,7 @@ Finds [TLDR newsletter](https://tldr.tech/) articles that match user-defined cri
 
 ## Evaluation pipeline
 
-- Stage 1 (screener) — Runs when `screeningModel` is set. Uses only the article's title and summary to decide if the topic could relate to your criteria. Rejected links are not fetched (saves tokens and time). Omit `screeningModel` to skip Stage 1 and send every link to Stage 2.
+- Stage 1 (screener) — Runs when `models.screening` is set. Uses only the article's title and summary to decide if the topic could relate to your criteria. Rejected links are not fetched (saves tokens and time). Omit `models.screening` to skip Stage 1 and send every link to Stage 2.
 - Stage 2 (evaluator): The full article (capped at 120k characters) is fetched and the main text is extracted (capped at 100k characters). The evaluation model evaluates the document against your criteria.
 
 ## Prerequisites
@@ -35,15 +35,16 @@ OPENROUTER_API_KEY=your-api-key
 
 Config schema (`config.json`):
 
-| Field             | Type     | Description                                                                                                                                                                                               |
-| ----------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `newsletters`     | string[] | TLDR slugs to scrape (non-empty).                                                                                                                                                                         |
-| `dateStart`       | string   | Start date YYYY-MM-DD.                                                                                                                                                                                    |
-| `dateEnd`         | string   | End date YYYY-MM-DD.                                                                                                                                                                                      |
-| `criteria`        | string   | Matching criteria that the article must satisfy. Single markdown-formatted string. The app wraps this in a system instruction prompt. Must be non-empty.                                                  |
-| `evaluationModel` | string   | OpenRouter model ID for Stage 2 full article evaluation (e.g., `anthropic/claude-sonnet-4.5`). Required.                                                                                                  |
-| `screeningModel`  | string   | Optional. OpenRouter model ID for Stage 1 summary screening (e.g., `google/gemini-3-flash-preview`). If omitted, Stage 1 is skipped and every article is fetched and evaluated with the evaluation model. |
-| `outputFormat`    | string   | Optional. One of `md`, `json`, or `both`. Defaults to `json` if missing or invalid.                                                                                                                       |
+| Field               | Type     | Description                                                                                                                                                       |
+| ------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `newsletters`       | string[] | TLDR slugs to scrape (non-empty).                                                                                                                                 |
+| `dateStart`         | string   | Start date YYYY-MM-DD.                                                                                                                                            |
+| `dateEnd`           | string   | End date YYYY-MM-DD.                                                                                                                                              |
+| `criteria`          | string   | Matching criteria that the article must satisfy. Single markdown-formatted string. The app wraps this in a system instruction prompt. Must be non-empty.          |
+| `models`            | object   | Model IDs by role. Required.                                                                                                                                      |
+| `models.evaluation` | string   | OpenRouter model ID for Stage 2 full article evaluation. Required.                                                                                                |
+| `models.screening`  | string   | Optional. OpenRouter model ID for Stage 1 summary screening. If omitted, Stage 1 is skipped and every article is fetched and evaluated with the evaluation model. |
+| `outputFormat`      | string   | Optional. One of `md`, `json`, or `both`. Defaults to `json` if missing or invalid.                                                                               |
 
 Known TLDR slugs (any string is allowed; these are for reference):
 
@@ -79,10 +80,12 @@ Input (`config.json`):
 {
   "newsletters": ["ai", "dev"],
   "dateStart": "2025-10-07",
-  "dateEnd": "2025-10-25",
-  "evaluationModel": "anthropic/claude-sonnet-4.5",
-  "screeningModel": "google/gemini-3-flash-preview",
-  "criteria": "The article must satisfy all of the following:\n- Personal Experience: First-hand account from a developer or team.\n- Rarely Writing Manual Code: Strongly implies AI agents now handle most implementation.\n- Clear Productivity Gains: Quantitative delivery, throughput, or time savings from AI.",
+  "dateEnd": "2025-10-27",
+  "models": {
+    "evaluation": "arcee-ai/trinity-large-preview:free",
+    "screening": "arcee-ai/trinity-large-preview:free"
+  },
+    "criteria": "The article must strictly satisfy all of the following criteria:\n- Personal Experience: It is a first-hand account from a developer or team.\n- Rarely Writing Manual Code: The article states, implies, or supports a reasonable inference that AI coding agents are now so accurate that the human rarely performs manual implementation.\n- Clear Productivity Gains: The developer describes in quantitative terms materially faster delivery, higher throughput, or meaningful time savings due to AI assistance.",
   "outputFormat": "json"
 }
 ```
@@ -91,27 +94,20 @@ Output (`matching_articles.json`):
 
 ```json
 {
-  "metadata": {
-    "newsletters": ["ai", "dev"],
-    "dateStart": "2025-10-07",
-    "dateEnd": "2025-10-25",
-    "criteria": "...",
-    "generatedAt": "2026-02-20T12:06:25.218Z"
-  },
   "articles": [
     {
       "title": "From 8 years down to 6 months: How we built AI to split the monday.com monolith (9 minute read)",
       "url": "https://engineering.monday.com/from-8-years-down-to-6-months-how-we-built-ai-to-split-the-monday-com-monolith/",
       "date": "2025-10-08",
       "source": "ai",
-      "reason": "This is a first-hand account from the monday.com engineering team about building Morphex, an autonomous AI system for codebase migration. It explicitly states that humans moved from manual coding to managing agents, with the AI performing independent implementation across thousands of files. The productivity gains are quantified, reducing an estimated 8-year manual project to just 6 months."
+      "reason": "The article is a first-hand account from developers at monday.com who built and used Morphex, an AI-powered migration system. It clearly demonstrates that AI coding agents are now so accurate that humans rarely perform manual implementation, as Morphex autonomously extracted 1% of the codebase in a single day through automated processes. The article provides clear quantitative productivity gains, showing that a task originally estimated at 8 person-years of manual effort was reduced to just 6 months, with Morphex extracting 1% of the client-side codebase in a single day."
     },
     {
-      "title": "Living dangerously with Claude (10 minute read)",
-      "url": "https://simonwillison.net/2025/Oct/22/living-dangerously-with-claude/",
-      "date": "2025-10-24",
+      "title": "Getting DeepSeek-OCR working on an NVIDIA Spark via brute force using Claude Code (10 minute read)",
+      "url": "https://simonwillison.net/2025/Oct/20/deepseek-ocr-claude-code/",
+      "date": "2025-10-22",
       "source": "dev",
-      "reason": "The author provides a first-hand account of using Claude Code in 'YOLO mode' to complete three distinct technical projects in just 48 hours. He describes leaving the agent to solve 'hairy problems' autonomously while he performed other tasks or ate breakfast, essentially outsourcing the manual implementation entirely. The text provides clear productivity gains by citing 5 completed research projects in less than 2 days."
+      "reason": "The article is a first-hand account from a developer who used Claude Code to run a DeepSeek OCR model on NVIDIA Spark hardware. It explicitly states that the AI agent handled most of the implementation ('I decided to outsource the entire process to Claude Code'), with the developer only providing four prompts and spending just 5-10 minutes actively involved. The article quantifies productivity gains, noting the entire project took less than 40 minutes start to finish with most time spent waiting while the developer did other things. This demonstrates both rare manual coding and clear time savings."
     }
   ]
 }

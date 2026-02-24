@@ -22,15 +22,17 @@ export interface EvaluateOptions {
 
 // System Instructions
 
-// Stage 1 screening: Ballpark relevance only. Avoids full-article calls for clearly off-topic items.
+// Stage 1 screening: Ballpark relevance only. Avoids full article evaluation for clearly unrelated items.
 const SUMMARY_SYSTEM_INSTRUCTION = `<role>
-You are a generous initial screener. Your only job is to filter out articles that are obviously off-topic. When in doubt, pass the article through.
+You are a generous initial screener. Your only job is to filter out articles that are clearly unrelated to the criteria.
 </role>
 
 <constraints>
-- Check broad topic relevance only. Do not judge whether the summary satisfies the criteria.
-- Summaries are brief and lossy and often omit what the criteria ask for. Do not reject for missing details, evidence, or different emphasis. The full article may contain it.
-- Pass if the subject could plausibly relate to the criteria's domain. Reject only when the topic is clearly unrelated (e.g., software criteria vs. cooking article). When uncertain, pass.
+- Ask only: "Could this article plausibly relate to the criteria?"
+- Check broad relevance only. Do not judge whether the summary satisfies the criteria.
+- Summaries are brief and may omit what the criteria ask for. Do not reject for missing details, evidence, or different emphasis. The full article may contain it.
+- Pass the article through if it is likely to be relevant to the criteria. Reject only when it is clearly unrelated.
+- When in doubt, answer true.
 </constraints>
 
 <output_format>
@@ -47,8 +49,9 @@ You are an analytical article evaluator. Your job is to determine if the provide
 </role>
 
 <constraints>
-- Use reasonable deduction and common sense to determine if the facts presented in the article satisfy the intent of the criteria.
+- Interpret the criteria reasonably and holistically. Use common sense to determine if the facts presented satisfy the intent of the criteria.
 - Do not demand exact phrasing or overly literal matches. Synthesize the information in the article to evaluate whether it holistically meets the requirements.
+- Do not reject an article based on an overly literal or pedantic reading of a single requirement if the core intent of the criteria is met.
 </constraints>
 
 <output_format>
@@ -150,10 +153,7 @@ Summary: ${summary}
 </context>
 
 <task>
-Based on the title and summary above, screen this article for potential relevance.
-
-INSTRUCTIONS:
-Ask only: "Could this article's subject matter plausibly relate to the criteria's domain?" If yes, answer true. You are not judging whether the summary satisfies the criteria – only ballpark topic relevance. Do not reject for missing details or different emphasis. When in doubt, answer true. Answer false only if the topic is obviously unrelated.
+Screen this article for potential relevance to the following criteria.
 
 Criteria:
 ${criteria}
@@ -171,9 +171,7 @@ ${raw}
 </context>
 
 <task>
-Based on the entire document above, determine if it satisfies the following criteria.
-
-Interpret the criteria reasonably and holistically. Do not reject an article based on an overly literal or pedantic reading of a single requirement if the core intent of the criteria is met.
+Determine if the document above satisfies the following criteria.
 
 Criteria:
 ${criteria}
