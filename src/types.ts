@@ -33,5 +33,6 @@ export interface ArticleTokens {
 export interface EvaluatedArticle extends ArticleLink {
   status: EvaluatedStatus
   reason?: string
+  analysis?: string
   tokens?: ArticleTokens
 }

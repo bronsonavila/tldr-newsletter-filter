@@ -13,9 +13,11 @@ You are a generous initial screener. Your only job is to filter out articles tha
 - Ask only: "Could this article plausibly relate to the criteria?"
 - Check broad relevance only. Do not judge whether the summary satisfies the criteria.
 - Summaries are brief and may omit what the criteria ask for. Do not reject for missing details, evidence, or different emphasis. The full article may contain it.
+- Focus only on whether the article's topic could relate to the criteria. Never reject because the summary lacks the depth of detail or evidence the criteria describe.
 - Pass the article through if it is likely to be relevant to the criteria. Reject only when it is clearly unrelated.
-- Consider the title and summary together as a whole when judging relevance.
+- Consider the title, summary, and source together as a whole when judging relevance.
 - When in doubt, answer true.
+- Accept all claims in the summary at face value. Never fact-check details against your own knowledge; your training data may be outdated.
 </constraints>
 
 <output_format>
@@ -26,32 +28,34 @@ Return your response as JSON with these exact fields:
 }
 </output_format>`
 
-// Stage 2: Grounded but reasonable article evaluator.
+// Stage 2: Strict article evaluator.
 const ARTICLE_SYSTEM_INSTRUCTION = `<role>
 You are an analytical article evaluator. Your job is to determine if the provided article satisfies the user's criteria based on the text.
 </role>
 
 <constraints>
-- Interpret the criteria reasonably and holistically. Use common sense to determine if the facts presented satisfy the intent of the criteria.
-- Do not demand exact phrasing or overly literal matches. Synthesize the information in the article to evaluate whether it holistically meets the requirements.
-- Do not reject an article based on an overly literal or pedantic reading of a single requirement if the core intent of the criteria is met.
-- Each criterion must be satisfied on its own terms. Do not treat loosely related content as satisfying a criterion just because there is surface-level overlap.
+- Evaluate the document strictly against each criterion. Base your judgment on what the text explicitly states. Do not assume, infer, or stretch definitions to make the document fit.
+- Pay absolute attention to any explicit exclusions or negative constraints in the criteria. If a criterion specifies that something should not be included, or does not count, this is a hard boundary that cannot be overridden.
+- Each criterion must be evaluated independently. The document must satisfy all criteria to be considered a match. If even one criterion fails, the entire document fails.
+- Do not act as a defense attorney for the text. If you have to bend a rule or squint to make the text fit a criterion, it does not fit.
+- Accept all factual claims at face value. Never question their veracity based on your own knowledge; your training data may be outdated. Evaluate only whether the text satisfies the criteria as written.
 </constraints>
 
 <output_format>
 Return your response as JSON with these exact fields:
 {
+  "analysis": "Briefly evaluate the article against each numbered criterion step-by-step, with explicit note if any negative constraints are violated (1 sentence per criterion).",
   "satisfies_criteria": boolean,
-  "reason": "Concise explanation (1-4 sentences)"
+  "reason": "Concise explanation (1-4 sentences) summarizing the final decision."
 }
 </output_format>`
 
 // Types
 
 export type EvaluateResult =
-  | { status: 'matched'; reason: string; tokens?: TokenUsage }
-  | { status: 'not_matched'; reason: string; tokens?: TokenUsage }
-  | { status: 'evaluation_failed'; reason: string; tokens?: TokenUsage }
+  | { status: 'matched'; reason: string; analysis?: string; tokens?: TokenUsage }
+  | { status: 'not_matched'; reason: string; analysis?: string; tokens?: TokenUsage }
+  | { status: 'evaluation_failed'; reason: string; analysis?: string; tokens?: TokenUsage }
 
 export type SummaryEvaluateResult =
   | { status: 'passed'; reason: string; tokens?: TokenUsage }
@@ -61,9 +65,12 @@ export type SummaryEvaluateResult =
 export interface EvaluateOptions {
   model: string
   criteria: string[]
+  url?: string
 }
 
-type BooleanParseResult<T> = { status: T; reason: string } | { status: 'evaluation_failed'; reason: string }
+type BooleanParseResult<T> =
+  | { status: T; reason: string; analysis?: string }
+  | { status: 'evaluation_failed'; reason: string; analysis?: string }
 
 // Helpers
 
@@ -95,12 +102,13 @@ function parseBooleanJsonResponse<T extends string>(
     const parsed = JSON.parse(cleaned) as Record<string, unknown>
     const value = parsed[options.field]
     const reason = typeof parsed.reason === 'string' ? parsed.reason : ''
+    const analysis = typeof parsed.analysis === 'string' ? parsed.analysis : undefined
 
     if (value === true) {
-      return { status: options.trueStatus, reason }
+      return { status: options.trueStatus, reason, ...(analysis && { analysis }) }
     }
 
-    return { status: options.falseStatus, reason }
+    return { status: options.falseStatus, reason, ...(analysis && { analysis }) }
   } catch {
     const preview = (text ?? '').slice(0, 200).replace(/\n/g, '\\n')
 
@@ -128,29 +136,45 @@ function formatCriteria(criteria: string[]): string {
   return criteria.map((criterion, index) => `(${index + 1}) ${criterion}`).join('\n')
 }
 
-function buildSummaryUserContent(title: string, summary: string, criteria: string[]): string {
+function domainFromUrl(url: string | undefined): string {
+  if (!url?.trim()) return ''
+
+  try {
+    return new URL(url).hostname
+  } catch {
+    return ''
+  }
+}
+
+function buildSummaryUserContent(title: string, summary: string, criteria: string[], url?: string): string {
+  const domain = domainFromUrl(url)
+  const sourceLine = domain ? `\nSource: ${domain}\n` : '\n'
+
   return `<context>
 Title: ${title}
 
 Summary: ${summary}
-</context>
+${sourceLine}</context>
 
 <task>
-Screen this article for potential relevance to the following criteria.
+Perform a subject-matter check against the following criteria. The title, summary, and source only need to be about the same topic as the criteria; they do not need to satisfy the criteria yet.
 
-Criteria:
+Target Criteria:
 ${formatCriteria(criteria)}
 </task>`
 }
 
-function buildArticleUserContent(articleText: string, criteria: string[]): string {
+function buildArticleUserContent(articleText: string, criteria: string[], url?: string): string {
   const raw =
     articleText.length > MAX_ARTICLE_TEXT_LENGTH
       ? `${articleText.slice(0, MAX_ARTICLE_TEXT_LENGTH)}\n\n[Article truncated.]`
       : articleText
 
+  const domain = domainFromUrl(url)
+  const sourceLine = domain ? `Source: ${domain}\n\n` : ''
+
   return `<context>
-${raw}
+${sourceLine}${raw}
 </context>
 
 <task>
@@ -168,7 +192,7 @@ export async function evaluateSummary(
   summary: string,
   options: EvaluateOptions
 ): Promise<SummaryEvaluateResult> {
-  const userContent = buildSummaryUserContent(title, summary, options.criteria)
+  const userContent = buildSummaryUserContent(title, summary, options.criteria, options.url)
 
   return evaluateWithInstructions({
     model: options.model,
@@ -179,7 +203,7 @@ export async function evaluateSummary(
 }
 
 export async function evaluateArticle(articleText: string, options: EvaluateOptions): Promise<EvaluateResult> {
-  const userContent = buildArticleUserContent(articleText, options.criteria)
+  const userContent = buildArticleUserContent(articleText, options.criteria, options.url)
 
   return evaluateWithInstructions({
     model: options.model,

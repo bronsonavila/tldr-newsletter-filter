@@ -12,7 +12,8 @@ export async function evaluateLink(link: ArticleLink, config: Config): Promise<E
     if (link.summary && config.models.screening) {
       const summaryResult = await evaluateSummary(link.title, link.summary, {
         model: config.models.screening,
-        criteria: config.criteria
+        criteria: config.criteria,
+        url: link.url
       })
 
       if (summaryResult.tokens) {
@@ -43,7 +44,8 @@ export async function evaluateLink(link: ArticleLink, config: Config): Promise<E
 
     const evaluateResult = await evaluateArticle(fetchResult.text, {
       model: config.models.evaluation,
-      criteria: config.criteria
+      criteria: config.criteria,
+      url: link.url
     })
 
     if (evaluateResult.tokens) {
@@ -54,6 +56,7 @@ export async function evaluateLink(link: ArticleLink, config: Config): Promise<E
       ...link,
       status: evaluateResult.status,
       reason: evaluateResult.reason,
+      ...(evaluateResult.analysis && { analysis: evaluateResult.analysis }),
       ...(Object.keys(tokens).length > 0 && { tokens })
     }
   } catch (error) {
