@@ -33,8 +33,9 @@ export interface MatchingArticlesOutput {
     url: string
     date: string
     source: string
-    reason?: string
     summary?: string
+    reason?: string
+    analysis?: string
   }>
 }
 
@@ -113,13 +114,14 @@ function buildMatchingMarkdown(
   const list = articles
     .map(article => {
       const line = `- ${article.date} – [${article.title}](${normalizedUrl(article.url)}) (${article.source})`
+      const summary = article.summary?.trim()
       const reason = article.reason?.trim()
+      const parts: string[] = [line]
 
-      if (!reason) return line
+      if (summary) parts.push(`  - ${summary.replace(/\s+/g, ' ')}`)
+      if (reason) parts.push(`  - **Why it matched:** ${reason.replace(/\s+/g, ' ')}`)
 
-      const reasonOneLine = reason.replace(/\s+/g, ' ')
-
-      return `${line}\n  - ${reasonOneLine}`
+      return parts.join('\n')
     })
     .join('\n\n')
 
@@ -153,8 +155,9 @@ function buildMatchingJson(
       url: normalizedUrl(article.url),
       date: article.date,
       source: article.source,
+      ...(article.summary?.trim() && { summary: article.summary.trim() }),
       ...(article.reason?.trim() && { reason: article.reason.trim() }),
-      ...(article.summary?.trim() && { summary: article.summary.trim() })
+      ...(article.analysis?.trim() && { analysis: article.analysis.trim() })
     }))
   }
 }

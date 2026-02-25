@@ -60,13 +60,6 @@ Each run writes to a timestamped directory under `output/` (e.g. `output/2026-02
 - `matching_articles.json` — Written when `outputFormat` is `json` or `both`. Object: `metadata` and `articles`.
 - `matching_articles.md` — Written when `outputFormat` is `md` or `both`. A header with run config and generation time, then a bullet list of matches with a reason line per article.
 
-## Project structure
-
-- `src/index.ts` — Entry point and pipeline orchestration.
-- `src/pipeline/` — Scraper, article fetcher (with parse worker), evaluator (Stage 1 and Stage 2).
-- `src/output/` — Progress log and matching-articles output.
-- `src/config.ts`, `src/types.ts`, `src/constants.ts`, `src/utils/` — Config loading, types, shared constants, retry and URL helpers.
-
 ## Example
 
 Input (`config.json`):
@@ -74,38 +67,41 @@ Input (`config.json`):
 ```json
 {
   "newsletters": ["ai", "dev"],
-  "dateRange": ["2025-10-07", "2025-10-27"],
+  "dateRange": ["2025-10-01", "2025-10-13"],
   "models": {
     "screening": "google/gemini-2.5-flash-lite",
     "evaluation": "deepseek/deepseek-v3.2"
   },
   "criteria": [
-    "It is a first-hand account from a developer or team.",
-    "The article states, implies, or supports a reasonable inference that AI coding agents are now so accurate that the human rarely performs manual implementation.",
-    "The developer describes in quantitative terms materially faster delivery, higher throughput, or meaningful time savings due to AI assistance."
+    "The article's primary purpose is sharing real experience or insight, not marketing a product, announcing a launch, or promoting a company's tool or platform. Genuine personal reflections are acceptable even if they mention their company, but the article should not read as promotional content.",
+    "It is a first-hand account from an individual person or small team reflecting on their genuine experience, not a corporate blog showcasing an internal tool or platform capability.",
+    "The article describes one or more instances of the author using AI coding agents for substantial implementation of their own work. Meta-commentary or industry analysis about AI/LLMs does not satisfy this.",
+    "The author provides specific quantitative terms or reasoned estimates describing their own productivity gains from AI coding tools (e.g., time savings, percentage of code written by AI, before/after comparisons, ratio of active involvement to total time, cost savings, scope of work accomplished in a stated timeframe, etc.). General industry statistics, adoption figures, or market data do not count. Vague or impressionistic multipliers (e.g., 10x) also do not qualify."
   ],
   "outputFormat": "json"
 }
 ```
 
-Output (`output/2026-02-24_15-30-12/matching_articles.json`):
+Output (`matching_articles.json`):
 
 ```json
 {
   "articles": [
     {
-      "title": "From 8 years down to 6 months: How we built AI to split the monday.com monolith (9 minute read)",
-      "url": "https://engineering.monday.com/from-8-years-down-to-6-months-how-we-built-ai-to-split-the-monday-com-monolith/",
-      "date": "2025-10-08",
+      "title": "Real AI Agents and Real Work (7 minute read)",
+      "url": "https://www.oneusefulthing.org/p/real-ai-agents-and-real-work",
+      "date": "2025-10-01",
       "source": "ai",
-      "reason": "The article is a first-hand account from developers at monday.com who built and used Morphex, an AI-powered migration system. It clearly demonstrates that AI coding agents are now so accurate that humans rarely perform manual implementation, as Morphex autonomously extracted 1% of the codebase in a single day through automated processes. The article provides clear quantitative productivity gains, showing that a task originally estimated at 8 person-years of manual effort was reduced to just 6 months, with Morphex extracting 1% of the client-side codebase in a single day."
+      "reason": "The article satisfies all four criteria: it's a genuine personal reflection on AI experiences, written from a first-hand perspective, describes specific AI coding agent implementations for research replication, and provides multiple specific quantitative productivity metrics including time savings estimates and cost/effort percentages.",
+      "analysis": "Criterion 1: The article's primary purpose is sharing real experience and insight about AI capabilities and implications for work, not marketing a product. It discusses the author's personal experiments and reflections. Criterion 2: This is a first-hand account from an individual professor sharing genuine experiences with AI testing and replication experiments. Criterion 3: The article describes specific instances where the author used Claude Sonnet 4.5 and GPT-5 Pro to replicate academic research papers by having AI read papers, analyze data, and convert statistical code, which qualifies as using AI coding agents for substantial implementation work. Criterion 4: The author provides specific quantitative metrics including that AI replication \"would have taken many hours\" manually, that following an expert workflow with AI would get work done \"forty percent faster and sixty percent cheaper,\" and references OpenAI's test showing AI performing tasks that take human experts \"four to seven hours.\""
     },
     {
-      "title": "Getting DeepSeek-OCR working on an NVIDIA Spark via brute force using Claude Code (10 minute read)",
-      "url": "https://simonwillison.net/2025/Oct/20/deepseek-ocr-claude-code/",
-      "date": "2025-10-22",
+      "title": "Vibing a Non-Trivial Ghostty Feature (16 minute read)",
+      "url": "https://mitchellh.com/writing/non-trivial-vibing",
+      "date": "2025-10-13",
       "source": "dev",
-      "reason": "The article is a first-hand account from a developer who used Claude Code to run a DeepSeek OCR model on NVIDIA Spark hardware. It explicitly states that the AI agent handled most of the implementation ('I decided to outsource the entire process to Claude Code'), with the developer only providing four prompts and spending just 5-10 minutes actively involved. The article quantifies productivity gains, noting the entire project took less than 40 minutes start to finish with most time spent waiting while the developer did other things. This demonstrates both rare manual coding and clear time savings."
+      "reason": "The document meets all four criteria: it is a genuine personal reflection, a first-hand account, details substantial AI coding agent use, and provides specific quantitative estimates of time and cost related to the author's productivity.",
+      "analysis": "Criterion 1: The article's primary purpose is sharing the author's personal experience and process using AI agents to develop a feature, not marketing a product or platform; genuine reflections dominate despite mentions of their own app. Criterion 2: It is a first-hand account from Mitchell Hashimoto, an individual developer, detailing his personal workflow and challenges. Criterion 3: The article describes multiple specific sessions where the author used AI agents to implement substantial parts of the macOS update feature for Ghostty. Criterion 4: The author provides specific quantitative estimates: total token cost ($15.98), total 'wall clock' time spent (~8 hours), and notes working 4 hours a day over 3 days, satisfying the requirement for reasoned estimates of productivity gains."
     }
   ]
 }
