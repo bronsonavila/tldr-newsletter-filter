@@ -56,7 +56,9 @@ pnpm start
 
 Each run writes to a timestamped directory under `output/` (e.g. `output/2026-02-24_15-30-12/`):
 
-- `log.json` — One entry per evaluated URL (matched, not matched, summary rejected (Stage 1), fetch failed, or evaluation failed). Updated incrementally. Previous runs are preserved in their own directories.
+- `log.json` — The complete execution log, updated incrementally as articles are processed.
+  - **`metadata`**: Contains your run configuration alongside execution stats: timestamps, duration, total articles processed, token usage summaries, and final status counts.
+  - **`articles`**: A detailed record of every article processed, keyed by its URL. Each entry includes the article's details, its evaluation `status` (e.g., `matched`, `summary_rejected`), the model's `reason` and `analysis`, and the token usage for that specific article.
 - `matching_articles.json` — Written when `outputFormat` is `json` or `both`. Object: `metadata` and `articles`.
 - `matching_articles.md` — Written when `outputFormat` is `md` or `both`. A header with run config and generation time, then a bullet list of matches with a reason line per article.
 
