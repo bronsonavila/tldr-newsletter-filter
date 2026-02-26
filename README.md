@@ -6,12 +6,12 @@ Finds [TLDR newsletter](https://tldr.tech/) articles that match user-defined cri
 
 1. Scrapes TLDR archive pages for the newsletters and date range in your config (only non-sponsor links).
 2. For each scraped archive batch, fetches and evaluates all links in that batch concurrently.
-3. Each run creates a timestamped directory under `output/` (e.g. `output/2026-02-24_15-30-12/`) and writes `log.json` incrementally as each article is evaluated.
+3. Each run creates a timestamped directory under `output/` (e.g., `output/2026-02-24_15-30-12/`) and writes `log.json` incrementally as each article is evaluated.
 4. At the end of the run, writes `matching_articles.json`, `matching_articles.md`, or both (per `outputFormat`) into the same run directory.
 
 ## Evaluation pipeline
 
-- Stage 1 (screener) — Runs when `models.screening` is set. Uses only the article's title and summary to decide if the topic could relate to your criteria. Rejected links are not fetched (saves tokens and time). Omit `models.screening` to skip Stage 1 and send every link to Stage 2.
+- Stage 1 (screener): Runs when `models.screening` is set. Uses only the article's title and summary to decide if the topic could relate to your criteria. Rejected links are not fetched (saves tokens and time). Omit `models.screening` to skip Stage 1 and send every link to Stage 2.
 - Stage 2 (evaluator): The full article is fetched and the main text is extracted, then capped at 100k characters before being sent to the evaluation model, which evaluates the document against your criteria.
 
 ## Prerequisites
@@ -54,13 +54,13 @@ pnpm install
 pnpm start
 ```
 
-Each run writes to a timestamped directory under `output/` (e.g. `output/2026-02-24_15-30-12/`):
+Each run writes to a timestamped directory under `output/` (e.g., `output/2026-02-24_15-30-12/`):
 
-- `log.json` — The complete execution log, updated incrementally as articles are processed.
+- `log.json`: The complete execution log, updated incrementally as articles are processed.
   - **`metadata`**: Contains your run configuration alongside execution stats: timestamps, duration, total articles processed, token usage summaries, and final status counts.
   - **`articles`**: A detailed record of every article processed, keyed by its URL. Each entry includes the article's details, its evaluation `status` (e.g., `matched`, `summary_rejected`), the model's `reason` and `analysis`, and the token usage for that specific article.
-- `matching_articles.json` — Written when `outputFormat` is `json` or `both`. Object: `metadata` and `articles`.
-- `matching_articles.md` — Written when `outputFormat` is `md` or `both`. A header with run config and generation time, then a bullet list of matches with a reason line per article.
+- `matching_articles.json`: Written when `outputFormat` is `json` or `both`. Object: `metadata` and `articles`.
+- `matching_articles.md`: Written when `outputFormat` is `md` or `both`. A header with run config and generation time, then a bullet list of matches with a reason line per article.
 
 ## Example
 
