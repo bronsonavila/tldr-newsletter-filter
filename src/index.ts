@@ -1,15 +1,17 @@
 import 'dotenv/config'
-import ora from 'ora'
 import { loadConfig } from './config.js'
 import { SPINNER_INTERVAL_MS } from './constants.js'
+import { printConfigBanner, printResultsSummary } from './output/console.js'
 import { writeOutput } from './output/output.js'
 import { appendProgressLog, finalizeProgressLog, initProgressLog } from './output/progressLog.js'
 import { initRunDir } from './output/runDir.js'
+import { createTerminalDisplay, type TerminalDisplay } from './output/terminalDisplay.js'
 import { createBatchProcessor } from './pipeline/batchProcessor.js'
 import { evaluateLink } from './pipeline/linkPipeline.js'
 import { scrapeArchivesBatched } from './pipeline/scraper.js'
 import type { ArticleLink, EvaluatedArticle } from './types.js'
 import { EVALUATED_STATUS } from './types.js'
+import { formatDurationMs } from './utils/format.js'
 import { normalizedUrl } from './utils/url.js'
 
 // Helpers
@@ -17,12 +19,21 @@ import { normalizedUrl } from './utils/url.js'
 async function recordResult(
   progress: Record<string, EvaluatedArticle>,
   counts: { done: number; matches: number },
-  result: EvaluatedArticle
+  result: EvaluatedArticle,
+  display: TerminalDisplay
 ): Promise<void> {
   await appendProgressLog(progress, result)
 
   counts.done = Object.keys(progress).length
   counts.matches = Object.values(progress).filter(record => record.status === EVALUATED_STATUS.matched).length
+
+  if (result.status === EVALUATED_STATUS.matched) {
+    if (counts.matches === 1) {
+      display.printMatch('Matches:')
+    }
+
+    display.printMatch(`  ${result.title}`)
+  }
 }
 
 function matchCountText(count: number): string {
@@ -33,6 +44,8 @@ function matchCountText(count: number): string {
 
 async function main(): Promise<void> {
   const config = await loadConfig()
+
+  printConfigBanner(config)
 
   if (!process.env.OPENROUTER_API_KEY?.trim()) {
     throw new Error('OPENROUTER_API_KEY must be set')
@@ -52,12 +65,14 @@ async function main(): Promise<void> {
 
   console.log(`Scraping TLDR ${config.newsletters.join(', ')} archives (${config.dateStart} to ${config.dateEnd})...`)
 
-  let spinner: ReturnType<typeof ora> | null = null
+  const display = createTerminalDisplay()
+
   let progressInterval: ReturnType<typeof setInterval> | null = null
 
   const shutdown = () => {
     if (progressInterval) clearInterval(progressInterval)
-    if (spinner) spinner.stop()
+
+    display.stop()
 
     console.log('\nInterrupted')
 
@@ -76,7 +91,7 @@ async function main(): Promise<void> {
     dateStart: config.dateStart,
     dateEnd: config.dateEnd,
     onProgress: (date, source, count) => {
-      if (count > 0) console.log(`  ${date} ${source}: ${count} links`)
+      if (count > 0) display.printScrapeProgress(`${`  ${date} ${source}:`.padEnd(24)}${count} links`)
     }
   })) {
     // Filter out already-processed links. Normalize URL so every record uses the same canonical form.
@@ -86,6 +101,7 @@ async function main(): Promise<void> {
       const key = normalizedUrl(link.url)
 
       if (key in progress) continue
+      if (queuedUrls.has(key)) continue
 
       queuedUrls.add(key)
 
@@ -95,13 +111,15 @@ async function main(): Promise<void> {
     if (linksToProcess.length === 0) continue
 
     // Start spinner on first batch with links.
-    if (!spinner) {
-      spinner = ora({ text: 'Evaluating...', stream: process.stdout, discardStdin: false }).start()
+    if (progressInterval === null) {
+      display.startSpinner('Evaluating...')
 
       progressInterval = setInterval(() => {
-        if (spinner) {
-          spinner.text = `Evaluating... ${counts.done}/${queuedUrls.size} done, ${matchCountText(counts.matches)}`
-        }
+        const elapsed = formatDurationMs(Date.now() - startTime)
+
+        display.updateSpinner(
+          `Evaluating... ${counts.done}/${queuedUrls.size} done, ${matchCountText(counts.matches)} (${elapsed})`
+        )
       }, SPINNER_INTERVAL_MS)
     }
 
@@ -113,19 +131,18 @@ async function main(): Promise<void> {
 
     queueBatch(linkPromises)
 
-    await flushCompleted(result => recordResult(progress, counts, result))
+    await flushCompleted(result => recordResult(progress, counts, result, display))
 
     // Don't pull the next newsletter until the pool has room. Flush after each completion so the log updates.
-    await waitForCapacity(async () => await flushCompleted(result => recordResult(progress, counts, result)))
+    await waitForCapacity(async () => await flushCompleted(result => recordResult(progress, counts, result, display)))
   }
 
-  await flushAll(result => recordResult(progress, counts, result))
+  await flushAll(result => recordResult(progress, counts, result, display))
 
   if (progressInterval) clearInterval(progressInterval)
 
-  if (spinner) spinner.stop()
+  display.stop()
 
-  // Output is the full set of matched articles from the in-memory progress map (all evaluated this run, keyed by normalized URL).
   const matching = Object.values(progress).filter(record => record.status === EVALUATED_STATUS.matched)
   const durationMs = Date.now() - startTime
   const uniqueArticleCount = Object.keys(progress).length
@@ -134,19 +151,7 @@ async function main(): Promise<void> {
 
   const outputPaths = await writeOutput(matching, config, durationMs, uniqueArticleCount, matching.length)
 
-  if (matching.length > 0) {
-    console.log('\nMatches:')
-
-    for (const article of matching) {
-      console.log(`  ${article.title}`)
-    }
-  }
-
-  const matchLabel = matching.length === 1 ? 'match' : 'matches'
-
-  console.log(
-    `\nEvaluated ${uniqueArticleCount} articles, ${matching.length} ${matchLabel} → ${outputPaths.join(', ')}`
-  )
+  printResultsSummary(progress, durationMs, outputPaths)
 }
 
 main().catch(error => {

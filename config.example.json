@@ -1,6 +1,6 @@
 {
   "newsletters": ["ai", "dev"],
-  "dateRange": ["2026-01-01", "2026-01-31"],
+  "dateRange": ["-6d", "today"],
   "models": {
     "screening": "google/gemini-2.5-flash-lite",
     "evaluation": "deepseek/deepseek-v3.2"

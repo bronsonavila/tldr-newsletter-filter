@@ -84,6 +84,8 @@ export function createBatchProcessor(concurrentLimit: number) {
     async flushAll(onResult: (result: EvaluatedArticle) => Promise<void>): Promise<void> {
       for (const batch of pendingBatches) {
         for (const link of batch.links) {
+          if (link.flushed) continue
+
           const result = await link.promise
 
           await onResult(result)

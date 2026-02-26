@@ -8,6 +8,31 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
 // Helpers
 
+function isoToday(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function isoRelative(daysOffset: number, baseDate?: string): string {
+  const date = baseDate ? new Date(baseDate) : new Date()
+
+  date.setUTCDate(date.getUTCDate() + daysOffset)
+
+  return date.toISOString().slice(0, 10)
+}
+
+function resolveDate(value: string, baseDate?: string): string {
+  const lower = value.trim().toLowerCase()
+
+  if (lower === 'today') return isoToday()
+  if (lower === 'yesterday') return isoRelative(-1, baseDate)
+
+  const relativeDayMatch = lower.match(/^-(\d+)d$/)
+
+  if (relativeDayMatch) return isoRelative(-Number(relativeDayMatch[1]), baseDate)
+
+  return value
+}
+
 function isValidDate(dateString: string): boolean {
   if (!DATE_REGEX.test(dateString)) return false
 
@@ -16,9 +41,27 @@ function isValidDate(dateString: string): boolean {
   return !Number.isNaN(parsedDate.getTime())
 }
 
-// Schema
+function resolveDateRange(range: string[]): string[] {
+  if (range.length === 1) {
+    const resolved = resolveDate(range[0])
 
-const dateString = z.string().regex(DATE_REGEX, 'Must be YYYY-MM-DD').refine(isValidDate, 'Must be a valid date')
+    if (!DATE_REGEX.test(resolved) || !isValidDate(resolved)) throw new Error('Invalid date format')
+
+    return [resolved]
+  }
+
+  const endDate = resolveDate(range[1])
+
+  if (!DATE_REGEX.test(endDate) || !isValidDate(endDate)) throw new Error('Invalid date format')
+
+  const startDate = resolveDate(range[0], endDate)
+
+  if (!DATE_REGEX.test(startDate) || !isValidDate(startDate)) throw new Error('Invalid date format')
+
+  return [startDate, endDate]
+}
+
+// Schema
 
 const outputFormatEnum = z.enum(['md', 'json', 'both'])
 
@@ -26,9 +69,10 @@ export const ConfigSchema = z
   .object({
     newsletters: z.array(z.string()).min(1, "Config must have a non-empty array 'newsletters'"),
     dateRange: z
-      .array(dateString)
+      .array(z.string())
       .min(1, 'dateRange must have 1 or 2 dates')
-      .max(2, 'dateRange must have 1 or 2 dates'),
+      .max(2, 'dateRange must have 1 or 2 dates')
+      .transform(resolveDateRange),
     criteria: z
       .array(z.string().transform(s => s.trim()))
       .transform(arr => arr.filter(s => s.length > 0))
@@ -46,10 +90,17 @@ export const ConfigSchema = z
     outputFormat: outputFormatEnum.optional().default('json'),
     concurrentLimit: z.number().int().min(1).optional().default(15)
   })
-  .refine(data => data.dateRange.length === 1 || new Date(data.dateRange[0]) <= new Date(data.dateRange[1]), {
-    message: 'When dateRange has 2 elements, the first must be before or equal to the second',
-    path: ['dateRange']
-  })
+  .refine(
+    data => {
+      if (data.dateRange.length === 1) return true
+
+      return new Date(data.dateRange[0]) <= new Date(data.dateRange[1])
+    },
+    {
+      message: 'When dateRange has 2 elements, the first must be before or equal to the second',
+      path: ['dateRange']
+    }
+  )
   .transform(data => ({
     ...data,
     dateStart: data.dateRange[0],

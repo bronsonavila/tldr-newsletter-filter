@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Config } from '../config.js'
 import type { EvaluatedArticle } from '../types.js'
+import { formatDurationMs } from '../utils/format.js'
 import { normalizedUrl } from '../utils/url.js'
 import { getRunDir } from './runDir.js'
 
@@ -59,29 +60,13 @@ function getGeneratedAt(): string {
   return new Date().toISOString()
 }
 
-function formatDurationMs(durationMs: number): string {
-  const totalSeconds = Math.round(durationMs / 1000)
-
-  if (totalSeconds < 60) return `${totalSeconds}s`
-
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-
-  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`
-}
-
 function formatCriteriaForMarkdown(criteria: string[]): string {
   if (criteria.length === 0) return ''
 
   return `\n${criteria.map((criterion, index) => `  ${index + 1}. ${criterion}`).join('\n')}`
 }
 
-function buildMatchingHeader(
-  config: Config,
-  durationMs: number,
-  evaluatedCount: number,
-  matchCount: number
-): string {
+function buildMatchingHeader(config: Config, durationMs: number, evaluatedCount: number, matchCount: number): string {
   const generatedAt = getGeneratedAt()
   const slugList = config.newsletters.join(', ')
   const modelsLine = config.models.screening
@@ -92,7 +77,7 @@ function buildMatchingHeader(
 
 - **Newsletters:** ${slugList}
 - **Date range:** ${config.dateStart} to ${config.dateEnd}
-- **Criteria:** ${formatCriteriaForMarkdown(config.criteria)}
+- **Criteria:**${formatCriteriaForMarkdown(config.criteria)}
 ${modelsLine}
 - **Evaluated:** ${evaluatedCount} articles, ${matchCount} ${matchCount === 1 ? 'match' : 'matches'}
 - **Generated:** ${generatedAt}
@@ -171,7 +156,7 @@ export async function writeOutput(
   evaluatedCount: number,
   matchCount: number
 ): Promise<string[]> {
-  const matchingDeduped = dedupeByUrl(matching)
+  const matchingDeduped = dedupeByUrl(matching).sort((a, b) => a.date.localeCompare(b.date))
   const format = config.outputFormat ?? 'json'
   const runDir = getRunDir()
 
@@ -191,13 +176,7 @@ export async function writeOutput(
 
   if (format === 'json' || format === 'both') {
     const jsonPath = join(runDir, MATCHING_JSON_FILENAME)
-    const payload = buildMatchingJson(
-      matchingDeduped,
-      config,
-      durationMs,
-      evaluatedCount,
-      matchCount
-    )
+    const payload = buildMatchingJson(matchingDeduped, config, durationMs, evaluatedCount, matchCount)
 
     await writeFile(jsonPath, JSON.stringify(payload, null, 2), 'utf8')
 

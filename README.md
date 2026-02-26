@@ -35,16 +35,16 @@ OPENROUTER_API_KEY=your-api-key
 
 Config schema (`config.json`):
 
-| Field               | Type     | Description                                                                                                                                                                           |
-| ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `newsletters`       | string[] | TLDR slugs to scrape (non-empty). Known slugs: `ai`, `crypto`, `data`, `design`, `dev`, `devops`, `fintech`, `founders`, `hardware`, `infosec`, `it`, `marketing`, `product`, `tech`. |
-| `dateRange`         | string[] | One date (YYYY-MM-DD) for a single day, or two dates for start and end (inclusive). Array length must be 1 or 2.                                                                      |
-| `criteria`          | string[] | Matching criteria that the article must satisfy. Each array element is a separate criterion string. The app numbers and formats them for prompts and output. Must be non-empty.       |
-| `models`            | object   | Model IDs by role. Required.                                                                                                                                                          |
-| `models.screening`  | string   | Optional. OpenRouter model ID for Stage 1 summary screening. If omitted, Stage 1 is skipped and every article is fetched and evaluated with the evaluation model.                     |
-| `models.evaluation` | string   | OpenRouter model ID for Stage 2 full article evaluation. Required.                                                                                                                    |
-| `outputFormat`      | string   | Optional. One of `md`, `json`, or `both`. Defaults to `json` if missing or invalid.                                                                                                   |
-| `concurrentLimit`   | number   | Optional. Maximum number of article evaluations (fetch + LLM) in flight at once. Defaults to `15`. Lower this if you hit rate limits.                                                 |
+| Field               | Type     | Description                                                                                                                                                                                    |
+| ------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `newsletters`       | string[] | TLDR slugs to scrape (non-empty). Known slugs: `ai`, `crypto`, `data`, `design`, `dev`, `devops`, `fintech`, `founders`, `hardware`, `infosec`, `it`, `marketing`, `product`, `tech`.          |
+| `dateRange`         | string[] | One date for a single day, or two dates for start and end (inclusive). Use `YYYY-MM-DD`, or relative: `today`, `yesterday`, or `-Nd` (e.g. `-7d` for 7 days ago). Array length must be 1 or 2. |
+| `criteria`          | string[] | Matching criteria that the article must satisfy. Each array element is a separate criterion string. The app numbers and formats them for prompts and output. Must be non-empty.                |
+| `models`            | object   | Model IDs by role. Required.                                                                                                                                                                   |
+| `models.screening`  | string   | Optional. OpenRouter model ID for Stage 1 summary screening. If omitted, Stage 1 is skipped and every article is fetched and evaluated with the evaluation model.                              |
+| `models.evaluation` | string   | OpenRouter model ID for Stage 2 full article evaluation. Required.                                                                                                                             |
+| `outputFormat`      | string   | Optional. One of `md`, `json`, or `both`. Defaults to `json` if missing or invalid.                                                                                                            |
+| `concurrentLimit`   | number   | Optional. Maximum number of article evaluations (fetch + LLM) in flight at once. Defaults to `15`. Lower this if you hit rate limits.                                                          |
 
 ## Run
 
@@ -54,6 +54,8 @@ Install dependencies, then start:
 pnpm install
 pnpm start
 ```
+
+At startup the resolved config is printed (newsletters, date range, criteria, models). While evaluating, matches are printed as they are found; a spinner shows progress and elapsed time. When the run finishes, a results summary shows counts by status, token usage, and output paths.
 
 Each run writes to a timestamped directory under `output/` (e.g., `output/2026-02-24_15-30-12/`):
 

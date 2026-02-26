@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio'
 import { SCRAPE_TIMEOUT_MS, USER_AGENT } from '../constants.js'
 import type { ArticleLink } from '../types.js'
 import { fetchWithRetry } from '../utils/retry.js'
+import { normalizedUrl } from '../utils/url.js'
 
 // Constants
 
@@ -62,6 +63,10 @@ function dateSourcePairs(
   return pairs
 }
 
+function normalizeTitle(title: string): string {
+  return title.replace(/\s*\(\d+\s*minute\s*read\)\s*$/i, '').trim()
+}
+
 async function fetchArchivePage(url: string): Promise<string | null> {
   try {
     const response = await fetchWithRetry(url, {
@@ -92,7 +97,7 @@ function extractLinksFromHtml(html: string, date: string, source: string): Artic
 
     if (!href?.startsWith('http')) return
 
-    const title = $a.text().trim()
+    const title = normalizeTitle($a.text())
 
     if (!title || title.includes(SPONSOR_MARKER)) return
 
@@ -120,9 +125,11 @@ export async function* scrapeArchivesBatched(options: ScrapeOptions): AsyncGener
     const newLinks: ArticleLink[] = []
 
     for (const link of allLinks) {
-      if (seen.has(link.url)) continue
+      const key = normalizedUrl(link.url)
 
-      seen.add(link.url)
+      if (seen.has(key)) continue
+
+      seen.add(key)
 
       newLinks.push(link)
     }
