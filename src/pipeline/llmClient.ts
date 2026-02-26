@@ -1,4 +1,5 @@
 import OpenAI, { APIConnectionError, APIConnectionTimeoutError } from 'openai'
+import { LLM_TIMEOUT_MS } from '../constants.js'
 import type { TokenUsage } from '../types.js'
 import { RETRYABLE_STATUS_CODES, withRetry } from '../utils/retry.js'
 
@@ -16,7 +17,7 @@ function getApiKey(): string {
 
 function getClient(): OpenAI {
   if (!client) {
-    client = new OpenAI({ apiKey: getApiKey(), baseURL: 'https://openrouter.ai/api/v1' })
+    client = new OpenAI({ apiKey: getApiKey(), baseURL: 'https://openrouter.ai/api/v1', timeout: LLM_TIMEOUT_MS })
   }
 
   return client

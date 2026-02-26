@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { Worker } from 'node:worker_threads'
-import { FETCH_TIMEOUT_MS, USER_AGENT } from '../constants.js'
+import { FETCH_TIMEOUT_MS, PARSE_TIMEOUT_MS, USER_AGENT } from '../constants.js'
 import { fetchWithRetry } from '../utils/retry.js'
 
 // Constants
@@ -38,8 +38,38 @@ function parseInWorker(html: string, url: string): Promise<FetchResult> {
       execArgv: ['--import', 'tsx']
     })
 
-    worker.once('message', (result: FetchResult) => resolve(result))
-    worker.once('error', error => resolve({ ok: false, reason: failureReason(error) }))
+    // Guard against the worker hanging or exiting without a message.
+    let settled = false
+
+    function settle(result: FetchResult): void {
+      if (settled) return
+
+      settled = true
+
+      worker.terminate()
+
+      resolve(result)
+    }
+
+    const timer = setTimeout(() => settle({ ok: false, reason: 'Parse timeout' }), PARSE_TIMEOUT_MS)
+
+    worker.once('message', (result: FetchResult) => {
+      clearTimeout(timer)
+
+      settle(result)
+    })
+
+    worker.once('error', error => {
+      clearTimeout(timer)
+
+      settle({ ok: false, reason: failureReason(error) })
+    })
+
+    worker.once('exit', code => {
+      clearTimeout(timer)
+
+      settle({ ok: false, reason: `Worker exited unexpectedly (code ${code})` })
+    })
   })
 }
 

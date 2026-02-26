@@ -1,12 +1,16 @@
 export const FETCH_TIMEOUT_MS = 8_000
 
-export const MAX_BACKOFF_MS = 5_000
+export const LLM_TIMEOUT_MS = 60_000
 
 export const MAX_ARTICLE_TEXT_LENGTH = 100_000
+
+export const MAX_BACKOFF_MS = 5_000
 
 export const MAX_RETRIES = 3
 
 export const OUTPUT_DIR = 'output'
+
+export const PARSE_TIMEOUT_MS = 10_000
 
 export const SCRAPE_TIMEOUT_MS = 8_000
 

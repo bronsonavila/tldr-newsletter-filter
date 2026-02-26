@@ -48,6 +48,7 @@ async function main(): Promise<void> {
 
   const startTime = Date.now()
   const counts = { done: 0, matches: 0 }
+  const queuedUrls = new Set<string>()
 
   console.log(`Scraping TLDR ${config.newsletters.join(', ')} archives (${config.dateStart} to ${config.dateEnd})...`)
 
@@ -66,7 +67,9 @@ async function main(): Promise<void> {
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 
-  const { limit, queueBatch, flushCompleted, flushAll, waitForCapacity, trackPromise } = createBatchProcessor(config.concurrentLimit)
+  const { limit, queueBatch, flushCompleted, flushAll, waitForCapacity, trackPromise } = createBatchProcessor(
+    config.concurrentLimit
+  )
 
   for await (const batch of scrapeArchivesBatched({
     newsletters: config.newsletters,
@@ -84,6 +87,8 @@ async function main(): Promise<void> {
 
       if (key in progress) continue
 
+      queuedUrls.add(key)
+
       linksToProcess.push({ ...link, url: key })
     }
 
@@ -95,7 +100,7 @@ async function main(): Promise<void> {
 
       progressInterval = setInterval(() => {
         if (spinner) {
-          spinner.text = `Evaluating... ${counts.done} done, ${matchCountText(counts.matches)}`
+          spinner.text = `Evaluating... ${counts.done}/${queuedUrls.size} done, ${matchCountText(counts.matches)}`
         }
       }, SPINNER_INTERVAL_MS)
     }
