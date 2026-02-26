@@ -44,7 +44,7 @@ Config schema (`config.json`):
 | `models.screening`  | string   | Optional. OpenRouter model ID for Stage 1 summary screening. If omitted, Stage 1 is skipped and every article is fetched and evaluated with the evaluation model.                     |
 | `models.evaluation` | string   | OpenRouter model ID for Stage 2 full article evaluation. Required.                                                                                                                    |
 | `outputFormat`      | string   | Optional. One of `md`, `json`, or `both`. Defaults to `json` if missing or invalid.                                                                                                   |
-| `concurrentLimit`   | number   | Optional. Maximum number of article evaluations (fetch + LLM) in flight at once. Defaults to `50`. Lower this if you hit rate limits.                                                 |
+| `concurrentLimit`   | number   | Optional. Maximum number of article evaluations (fetch + LLM) in flight at once. Defaults to `15`. Lower this if you hit rate limits.                                                 |
 
 ## Run
 
