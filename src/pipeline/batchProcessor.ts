@@ -1,5 +1,4 @@
 import pLimit from 'p-limit'
-import { CONCURRENT_LIMIT } from '../constants.js'
 import type { EvaluatedArticle } from '../types.js'
 
 // Types
@@ -17,8 +16,8 @@ interface PendingBatch {
 
 // Main Function
 
-export function createBatchProcessor() {
-  const limit = pLimit(CONCURRENT_LIMIT)
+export function createBatchProcessor(concurrentLimit: number) {
+  const limit = pLimit(concurrentLimit)
   const pendingBatches: PendingBatch[] = []
   const inFlightPromises: Set<Promise<EvaluatedArticle>> = new Set()
 

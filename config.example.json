@@ -11,5 +11,6 @@
     "The article describes one or more instances of the author using AI coding agents for substantial implementation of their own work. Meta-commentary or industry analysis about AI/LLMs does not satisfy this.",
     "The author provides specific quantitative terms or reasoned estimates describing their own productivity gains from AI coding tools (e.g., time savings, cost savings, before/after comparisons, percentage of code written by AI, ratio of active involvement to total time, scope of work accomplished in a stated timeframe, etc.). General industry statistics, adoption figures, or market data do not count. Vague or impressionistic multipliers (e.g., 10x) also do not qualify."
   ],
-  "outputFormat": "both"
+  "outputFormat": "both",
+  "concurrentLimit": 50
 }

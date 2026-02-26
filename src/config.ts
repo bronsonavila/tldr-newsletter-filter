@@ -43,7 +43,8 @@ export const ConfigSchema = z
         .min(1, "Config must have a non-empty string 'models.evaluation'")
         .transform(s => s.trim())
     }),
-    outputFormat: outputFormatEnum.optional().default('json')
+    outputFormat: outputFormatEnum.optional().default('json'),
+    concurrentLimit: z.number().int().min(1).optional().default(50)
   })
   .refine(data => data.dateRange.length === 1 || new Date(data.dateRange[0]) <= new Date(data.dateRange[1]), {
     message: 'When dateRange has 2 elements, the first must be before or equal to the second',

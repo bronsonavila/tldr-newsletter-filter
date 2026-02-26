@@ -66,7 +66,7 @@ async function main(): Promise<void> {
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 
-  const { limit, queueBatch, flushCompleted, flushAll, waitForCapacity, trackPromise } = createBatchProcessor()
+  const { limit, queueBatch, flushCompleted, flushAll, waitForCapacity, trackPromise } = createBatchProcessor(config.concurrentLimit)
 
   for await (const batch of scrapeArchivesBatched({
     newsletters: config.newsletters,
