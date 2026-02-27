@@ -8,16 +8,24 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
 // Helpers
 
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
 function isoToday(): string {
-  return new Date().toISOString().slice(0, 10)
+  return formatLocalDate(new Date())
 }
 
 function isoRelative(daysOffset: number, baseDate?: string): string {
-  const date = baseDate ? new Date(baseDate) : new Date()
+  const date = baseDate ? new Date(`${baseDate}T00:00:00`) : new Date()
 
-  date.setUTCDate(date.getUTCDate() + daysOffset)
+  date.setDate(date.getDate() + daysOffset)
 
-  return date.toISOString().slice(0, 10)
+  return formatLocalDate(date)
 }
 
 function resolveDate(value: string, baseDate?: string): string {
