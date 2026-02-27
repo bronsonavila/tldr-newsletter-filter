@@ -2,6 +2,8 @@
 
 Finds [TLDR newsletter](https://tldr.tech/) articles that match user-defined criteria using [OpenRouter](https://openrouter.ai/). You choose which newsletters to scrape, the date range, the matching criteria, and which AI models to use for evaluation.
 
+<img src="demo.gif" alt="Demo: running pnpm start" style="max-width: 830px;">
+
 ## What it does
 
 1. Scrapes TLDR archive pages for the newsletters and date range in your config (only non-sponsor links).
