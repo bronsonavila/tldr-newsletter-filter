@@ -1,4 +1,5 @@
 import OpenAI, { APIConnectionError, APIConnectionTimeoutError } from 'openai'
+import type { ChatCompletion } from 'openai/resources'
 import { LLM_TIMEOUT_MS } from '../constants.js'
 import type { TokenUsage } from '../types.js'
 import { RETRYABLE_STATUS_CODES, withRetry } from '../utils/retry.js'
@@ -51,6 +52,7 @@ export async function evaluateWithInstructions<T extends { status: string; reaso
   model: string
   systemInstruction: string
   userContent: string
+  responseSchema: { name: string; strict: boolean; schema: object }
   parse: (content: string | undefined) => T
 }): Promise<T & { tokens?: TokenUsage }> {
   const client = getClient()
@@ -63,13 +65,18 @@ export async function evaluateWithInstructions<T extends { status: string; reaso
           { role: 'system', content: options.systemInstruction },
           { role: 'user', content: options.userContent }
         ],
-        response_format: { type: 'json_object' }
-      }),
+        response_format: {
+          type: 'json_schema',
+          json_schema: options.responseSchema
+        },
+        plugins: [{ id: 'response-healing' }]
+      } as Parameters<typeof client.chat.completions.create>[0]),
     { isRetryableError: isRetryableApiError }
   )
 
-  const result = options.parse(response.choices?.[0]?.message?.content ?? undefined)
-  const usage = response.usage
+  const completion = response as ChatCompletion
+  const result = options.parse(completion.choices[0]?.message?.content ?? undefined)
+  const usage = completion.usage
 
   const tokens: TokenUsage | undefined =
     usage && (typeof usage.prompt_tokens === 'number' || typeof usage.completion_tokens === 'number')

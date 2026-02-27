@@ -1,7 +1,12 @@
 import { MAX_ARTICLE_TEXT_LENGTH } from '../constants.js'
 import { EVALUATED_STATUS, type TokenUsage } from '../types.js'
 import { evaluateWithInstructions } from './llmClient.js'
-import { ARTICLE_SYSTEM_INSTRUCTION, SUMMARY_SYSTEM_INSTRUCTION } from './prompts.js'
+import {
+  ARTICLE_RESPONSE_SCHEMA,
+  ARTICLE_SYSTEM_INSTRUCTION,
+  SUMMARY_RESPONSE_SCHEMA,
+  SUMMARY_SYSTEM_INSTRUCTION
+} from './prompts.js'
 
 // Types
 
@@ -38,7 +43,7 @@ function parseBooleanJsonResponse<T extends string>(
   let cleaned = text.trim()
 
   // Model may return JSON wrapped in markdown. Strip fences and extract object for parsing.
-  const fenceMatch = cleaned.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
 
   if (fenceMatch) {
     cleaned = fenceMatch[1].trim()
@@ -62,10 +67,11 @@ function parseBooleanJsonResponse<T extends string>(
     }
 
     return { status: options.falseStatus, reason, ...(analysis && { analysis }) }
-  } catch {
-    const preview = (text ?? '').slice(0, 200).replace(/\n/g, '\\n')
+  } catch (error) {
+    const parseError = error instanceof Error ? error.message : 'Unknown error'
+    const escaped = (text ?? '').replace(/\n/g, '\\n')
 
-    return { status: 'evaluation_failed', reason: `Invalid JSON: ${preview}` }
+    return { status: 'evaluation_failed', reason: `Invalid JSON (${parseError}): ${escaped}` }
   }
 }
 
@@ -151,6 +157,7 @@ export async function evaluateSummary(
     model: options.model,
     systemInstruction: SUMMARY_SYSTEM_INSTRUCTION,
     userContent,
+    responseSchema: SUMMARY_RESPONSE_SCHEMA,
     parse: parseSummaryResponse
   })
 }
@@ -162,6 +169,7 @@ export async function evaluateArticle(articleText: string, options: EvaluateOpti
     model: options.model,
     systemInstruction: ARTICLE_SYSTEM_INSTRUCTION,
     userContent,
+    responseSchema: ARTICLE_RESPONSE_SCHEMA,
     parse: parseStructuredResponse
   })
 }

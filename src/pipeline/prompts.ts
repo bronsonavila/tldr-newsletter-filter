@@ -40,3 +40,32 @@ Return your response as JSON with these exact fields:
   "reason": "Concise explanation (1-4 sentences) summarizing the final decision."
 }
 </output_format>`
+
+export const SUMMARY_RESPONSE_SCHEMA = {
+  name: 'screening_response',
+  strict: true,
+  schema: {
+    type: 'object',
+    properties: {
+      potentially_relevant: { type: 'boolean' },
+      reason: { type: 'string' }
+    },
+    required: ['potentially_relevant', 'reason'],
+    additionalProperties: false
+  }
+}
+
+export const ARTICLE_RESPONSE_SCHEMA = {
+  name: 'evaluation_response',
+  strict: true,
+  schema: {
+    type: 'object',
+    properties: {
+      analysis: { type: 'string' },
+      satisfies_criteria: { type: 'boolean' },
+      reason: { type: 'string' }
+    },
+    required: ['analysis', 'satisfies_criteria', 'reason'],
+    additionalProperties: false
+  }
+}
