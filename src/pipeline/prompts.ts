@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 // Stage 1 screening: Ballpark relevance only. Avoids full article evaluation for clearly unrelated items.
 export const SUMMARY_SYSTEM_INSTRUCTION = `<role>
 You are a generous initial screener. Your only job is to filter out articles that are clearly unrelated to the criteria.
@@ -41,31 +43,13 @@ Return your response as JSON with these exact fields:
 }
 </output_format>`
 
-export const SUMMARY_RESPONSE_SCHEMA = {
-  name: 'screening_response',
-  strict: true,
-  schema: {
-    type: 'object',
-    properties: {
-      potentially_relevant: { type: 'boolean' },
-      reason: { type: 'string' }
-    },
-    required: ['potentially_relevant', 'reason'],
-    additionalProperties: false
-  }
-}
+export const SUMMARY_RESPONSE_SCHEMA = z.object({
+  potentially_relevant: z.boolean(),
+  reason: z.string()
+})
 
-export const ARTICLE_RESPONSE_SCHEMA = {
-  name: 'evaluation_response',
-  strict: true,
-  schema: {
-    type: 'object',
-    properties: {
-      analysis: { type: 'string' },
-      satisfies_criteria: { type: 'boolean' },
-      reason: { type: 'string' }
-    },
-    required: ['analysis', 'satisfies_criteria', 'reason'],
-    additionalProperties: false
-  }
-}
+export const ARTICLE_RESPONSE_SCHEMA = z.object({
+  analysis: z.string(),
+  satisfies_criteria: z.boolean(),
+  reason: z.string()
+})

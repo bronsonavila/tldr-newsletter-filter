@@ -1,5 +1,7 @@
 import OpenAI, { APIConnectionError, APIConnectionTimeoutError } from 'openai'
+import { zodResponseFormat } from 'openai/helpers/zod'
 import type { ChatCompletion } from 'openai/resources'
+import type { z } from 'zod'
 import { LLM_TIMEOUT_MS } from '../constants.js'
 import type { TokenUsage } from '../types.js'
 import { RETRYABLE_STATUS_CODES, withRetry } from '../utils/retry.js'
@@ -48,35 +50,38 @@ function isRetryableApiError(error: unknown): boolean {
 
 // Main Function
 
-export async function evaluateWithInstructions<T extends { status: string; reason: string }>(options: {
+export async function evaluateWithInstructions<
+  TSchema extends z.ZodTypeAny,
+  TResult extends { status: string; reason: string }
+>(options: {
   model: string
   systemInstruction: string
   userContent: string
-  responseSchema: { name: string; strict: boolean; schema: object }
-  parse: (content: string | undefined) => T
-}): Promise<T & { tokens?: TokenUsage }> {
+  responseSchema: TSchema
+  schemaName: string
+  parse: (content: z.infer<TSchema> | null) => TResult
+}): Promise<TResult & { tokens?: TokenUsage }> {
   const client = getClient()
 
   const response = await withRetry(
     () =>
-      client.chat.completions.create({
+      client.chat.completions.parse({
         model: options.model,
         messages: [
           { role: 'system', content: options.systemInstruction },
           { role: 'user', content: options.userContent }
         ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: options.responseSchema
-        },
+        response_format: zodResponseFormat(options.responseSchema, options.schemaName),
         plugins: [{ id: 'response-healing' }]
-      } as Parameters<typeof client.chat.completions.create>[0]),
+      }),
     { isRetryableError: isRetryableApiError }
   )
 
   const completion = response as ChatCompletion
-  const result = options.parse(completion.choices[0]?.message?.content ?? undefined)
   const usage = completion.usage
+  const result = options.parse(
+    (response as unknown as { choices: { message: { parsed: z.infer<TSchema> | null } }[] }).choices[0]?.message.parsed
+  )
 
   const tokens: TokenUsage | undefined =
     usage && (typeof usage.prompt_tokens === 'number' || typeof usage.completion_tokens === 'number')

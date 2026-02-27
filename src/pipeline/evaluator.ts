@@ -1,3 +1,4 @@
+import type { z } from 'zod'
 import { MAX_ARTICLE_TEXT_LENGTH } from '../constants.js'
 import { EVALUATED_STATUS, type TokenUsage } from '../types.js'
 import { evaluateWithInstructions } from './llmClient.js'
@@ -10,85 +11,53 @@ import {
 
 // Types
 
-export type EvaluateResult =
-  | { status: 'matched'; reason: string; analysis?: string; tokens?: TokenUsage }
-  | { status: 'not_matched'; reason: string; analysis?: string; tokens?: TokenUsage }
-  | { status: 'evaluation_failed'; reason: string; analysis?: string; tokens?: TokenUsage }
-
 export type SummaryEvaluateResult =
   | { status: 'passed'; reason: string; tokens?: TokenUsage }
   | { status: 'rejected'; reason: string; tokens?: TokenUsage }
   | { status: 'evaluation_failed'; reason: string; tokens?: TokenUsage }
+
+export type ArticleEvaluateResult =
+  | { status: 'matched'; reason: string; analysis?: string; tokens?: TokenUsage }
+  | { status: 'not_matched'; reason: string; analysis?: string; tokens?: TokenUsage }
+  | { status: 'evaluation_failed'; reason: string; analysis?: string; tokens?: TokenUsage }
 
 export interface EvaluateOptions {
   model: string
   criteria: string[]
   url?: string
 }
+type SummaryResponse = z.infer<typeof SUMMARY_RESPONSE_SCHEMA>
 
-type BooleanParseResult<T> =
-  | { status: T; reason: string; analysis?: string }
-  | { status: 'evaluation_failed'; reason: string; analysis?: string }
+type ArticleResponse = z.infer<typeof ARTICLE_RESPONSE_SCHEMA>
 
 // Helpers
 
-function parseBooleanJsonResponse<T extends string>(
-  text: string | undefined,
-  options: { trueStatus: T; falseStatus: T; field: string }
-): BooleanParseResult<T> {
-  if (!text?.trim()) {
-    return { status: 'evaluation_failed', reason: 'Empty response' }
+function parseStructuredResponse(parsed: ArticleResponse | null): ArticleEvaluateResult {
+  if (!parsed) {
+    return { status: 'evaluation_failed', reason: 'Empty or refused response' }
   }
 
-  let cleaned = text.trim()
+  const { analysis, satisfies_criteria: satisfiesCriteria, reason } = parsed
 
-  // Model may return JSON wrapped in markdown. Strip fences and extract object for parsing.
-  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
-
-  if (fenceMatch) {
-    cleaned = fenceMatch[1].trim()
+  if (satisfiesCriteria) {
+    return { status: EVALUATED_STATUS.matched, reason, ...(analysis && { analysis }) }
   }
 
-  const start = cleaned.indexOf('{')
-  const end = cleaned.lastIndexOf('}')
-
-  if (start !== -1 && end > start) {
-    cleaned = cleaned.slice(start, end + 1)
-  }
-
-  try {
-    const parsed = JSON.parse(cleaned) as Record<string, unknown>
-    const value = parsed[options.field]
-    const reason = typeof parsed.reason === 'string' ? parsed.reason : ''
-    const analysis = typeof parsed.analysis === 'string' ? parsed.analysis : undefined
-
-    if (value === true) {
-      return { status: options.trueStatus, reason, ...(analysis && { analysis }) }
-    }
-
-    return { status: options.falseStatus, reason, ...(analysis && { analysis }) }
-  } catch (error) {
-    const parseError = error instanceof Error ? error.message : 'Unknown error'
-    const escaped = (text ?? '').replace(/\n/g, '\\n')
-
-    return { status: 'evaluation_failed', reason: `Invalid JSON (${parseError}): ${escaped}` }
-  }
+  return { status: EVALUATED_STATUS.not_matched, reason, ...(analysis && { analysis }) }
 }
 
-function parseStructuredResponse(text: string | undefined): EvaluateResult {
-  return parseBooleanJsonResponse(text, {
-    field: 'satisfies_criteria',
-    trueStatus: EVALUATED_STATUS.matched,
-    falseStatus: EVALUATED_STATUS.not_matched
-  }) as EvaluateResult
-}
+function parseSummaryResponse(parsed: SummaryResponse | null): SummaryEvaluateResult {
+  if (!parsed) {
+    return { status: 'evaluation_failed', reason: 'Empty or refused response' }
+  }
 
-function parseSummaryResponse(text: string | undefined): SummaryEvaluateResult {
-  return parseBooleanJsonResponse(text, {
-    field: 'potentially_relevant',
-    trueStatus: 'passed',
-    falseStatus: 'rejected'
-  }) as SummaryEvaluateResult
+  const { potentially_relevant: potentiallyRelevant, reason } = parsed
+
+  if (potentiallyRelevant) {
+    return { status: 'passed', reason }
+  }
+
+  return { status: 'rejected', reason }
 }
 
 function formatCriteria(criteria: string[]): string {
@@ -158,11 +127,12 @@ export async function evaluateSummary(
     systemInstruction: SUMMARY_SYSTEM_INSTRUCTION,
     userContent,
     responseSchema: SUMMARY_RESPONSE_SCHEMA,
+    schemaName: 'screening_response',
     parse: parseSummaryResponse
   })
 }
 
-export async function evaluateArticle(articleText: string, options: EvaluateOptions): Promise<EvaluateResult> {
+export async function evaluateArticle(articleText: string, options: EvaluateOptions): Promise<ArticleEvaluateResult> {
   const userContent = buildArticleUserContent(articleText, options.criteria, options.url)
 
   return evaluateWithInstructions({
@@ -170,6 +140,7 @@ export async function evaluateArticle(articleText: string, options: EvaluateOpti
     systemInstruction: ARTICLE_SYSTEM_INSTRUCTION,
     userContent,
     responseSchema: ARTICLE_RESPONSE_SCHEMA,
+    schemaName: 'evaluation_response',
     parse: parseStructuredResponse
   })
 }
