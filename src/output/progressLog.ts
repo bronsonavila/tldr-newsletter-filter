@@ -23,6 +23,7 @@ export interface ProgressLogMetadata {
   dateEnd: string
   criteria: string[]
   models: { screening?: string; evaluation: string }
+  concurrentLimit: number
   startedAt: string
   completedAt?: string
   durationMs?: number
@@ -95,6 +96,7 @@ function computeMetadata(progress: Record<string, EvaluatedArticle>): ProgressLo
       ...(runConfig.models.screening && { screening: runConfig.models.screening }),
       evaluation: runConfig.models.evaluation
     },
+    concurrentLimit: runConfig.concurrentLimit,
     startedAt,
     ...(completedAt != null && { completedAt }),
     ...(durationMs != null && { durationMs }),
@@ -118,6 +120,7 @@ async function writeProgressLog(progress: Record<string, EvaluatedArticle>): Pro
         dateEnd: '',
         criteria: [],
         models: { evaluation: '' },
+        concurrentLimit: 0,
         startedAt: new Date().toISOString(),
         totalArticles: 0,
         totalTokens: {},
