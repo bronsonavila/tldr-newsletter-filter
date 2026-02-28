@@ -26,6 +26,7 @@ export interface EvaluateOptions {
   criteria: string[]
   url?: string
 }
+
 type SummaryResponse = z.infer<typeof SUMMARY_RESPONSE_SCHEMA>
 
 type ArticleResponse = z.infer<typeof ARTICLE_RESPONSE_SCHEMA>
